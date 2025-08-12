@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "DNS Ad Blocker",
+  "version": "1.0",
+  "description": "Block ads at the DNS level with customizable blocklists",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "webRequest",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon-16.svg",
+      "48": "assets/icon-48.svg",
+      "128": "assets/icon-128.svg"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "assets/icon-16.svg",
+    "48": "assets/icon-48.svg",
+    "128": "assets/icon-128.svg"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}
