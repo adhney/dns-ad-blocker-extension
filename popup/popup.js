@@ -327,10 +327,18 @@ function setupEventListeners() {
       e.preventDefault();
 
       try {
-        chrome.runtime.openOptionsPage();
-        showMessage("Settings opened", "success");
+        chrome.runtime.openOptionsPage(() => {
+          if (chrome.runtime.lastError) {
+            console.error('Error opening options page:', chrome.runtime.lastError);
+            showMessage("Error opening settings page", "error");
+          } else {
+            console.log('Options page opened successfully');
+            // Don't show success message as popup will close
+          }
+        });
       } catch (error) {
-        showMessage("Settings page not available yet", "error");
+        console.error('Settings button error:', error);
+        showMessage("Settings page not available", "error");
       }
     });
   }
@@ -441,9 +449,17 @@ function setupEventListeners() {
   if (openOptionsBtn) {
     openOptionsBtn.addEventListener("click", function () {
       try {
-        chrome.runtime.openOptionsPage();
-        showMessage("Options page opened", "success");
+        chrome.runtime.openOptionsPage(() => {
+          if (chrome.runtime.lastError) {
+            console.error('Error opening options page:', chrome.runtime.lastError);
+            showMessage("Error opening options page", "error");
+          } else {
+            console.log('Options page opened successfully');
+            // Don't show success message as popup will close
+          }
+        });
       } catch (error) {
+        console.error('Options button error:', error);
         showMessage("Options page not available", "error");
       }
     });
@@ -457,8 +473,11 @@ function setupEventListeners() {
   const aboutBtn = document.getElementById("aboutBtn");
   if (aboutBtn) {
     aboutBtn.addEventListener("click", function () {
+      const stats = extensionData?.statistics;
+      const activeBlocklists = extensionData?.blockLists?.filter(list => list.enabled).length || 0;
+      
       showMessage(
-        "DNS Ad Blocker v1.0 - Advanced ad blocking extension",
+        `DNS Ad Blocker v1.2 | ${activeBlocklists} active blocklists | ${stats?.blockedRequests || 0} blocked today`,
         "success"
       );
     });
@@ -695,20 +714,47 @@ function updateBlocklistSummary() {
 
   const html = extensionData.blockLists
     .map(
-      (blocklist) => `
-    <div class="blocklist-item">
+      (blocklist, index) => `
+    <div class="blocklist-item" data-index="${index}">
       <span class="blocklist-name">${escapeHtml(blocklist.name)}</span>
-      <span class="blocklist-status ${
+      <button class="blocklist-toggle ${
         blocklist.enabled ? "enabled" : "disabled"
-      }">
+      }" data-index="${index}">
         ${blocklist.enabled ? "Enabled" : "Disabled"}
-      </span>
+      </button>
     </div>
   `
     )
     .join("");
 
   container.innerHTML = html;
+
+  // Add click handlers for toggle buttons
+  container.querySelectorAll('.blocklist-toggle').forEach(button => {
+    button.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      const index = parseInt(this.dataset.index);
+      
+      try {
+        const result = await sendMessage({ action: 'toggleBlocklist', index: index });
+        if (result && result.success) {
+          // Get updated status and refresh UI
+          const status = await sendMessage({ action: 'getStatus' });
+          if (status && status.success) {
+            extensionData = status;
+            updateUI(status);
+            updateBlocklistSummary(); // Refresh the list
+          }
+          showMessage(result.message || 'Blocklist toggled', 'success');
+        } else {
+          showMessage('Failed to toggle blocklist', 'error');
+        }
+      } catch (error) {
+        console.error('Error toggling blocklist:', error);
+        showMessage('Error: ' + error.message, 'error');
+      }
+    });
+  });
 }
 
 // Export statistics as JSON

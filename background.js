@@ -3,7 +3,7 @@ console.log("DNS Ad Blocker background script loading...");
 
 // Extension state
 let extensionState = {
-  enabled: false,
+  enabled: true,
   statistics: {
     blockedRequests: 0,
     totalRequests: 0,
@@ -30,6 +30,16 @@ let extensionState = {
       enabled: true,
       url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
     },
+    {
+      name: "Steven Black + Social",
+      enabled: false,
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social/hosts",
+    },
+    {
+      name: "Steven Black + Gambling",
+      enabled: false,
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling/hosts",
+    },
   ],
   whitelistedSites: [],
   currentTab: null,
@@ -48,6 +58,11 @@ chrome.runtime.onInstalled.addListener(async () => {
     const saved = await chrome.storage.local.get(["extensionState"]);
     if (saved.extensionState) {
       extensionState = { ...extensionState, ...saved.extensionState };
+    } else {
+      // First install - ensure extension is enabled by default
+      extensionState.enabled = true;
+      await saveState();
+      console.log("First install - extension enabled by default");
     }
   } catch (error) {
     console.error("Error loading saved state:", error);
@@ -482,6 +497,21 @@ function getDefaultLists() {
       name: "Steven Black's Unified Hosts",
       url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
       description: "Unified hosts file with base adware + malware protection",
+    },
+    {
+      name: "Steven Black's Unified Hosts + Social",
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social/hosts",
+      description: "Base protection + social media blocking (Facebook, Twitter, etc.)",
+    },
+    {
+      name: "Steven Black's Unified Hosts + Gambling",
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling/hosts",
+      description: "Base protection + gambling sites blocking",
+    },
+    {
+      name: "Steven Black's Unified Hosts + Social + Gambling",
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-gambling/hosts",
+      description: "Base protection + social media + gambling blocking",
     },
     {
       name: "Peter Lowe's Ad and tracking server list",

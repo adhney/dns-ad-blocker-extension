@@ -1,6 +1,0 @@
-<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-  <rect width="48" height="48" fill="#2563eb" rx="8"/>
-  <path d="M12 24h24M24 12v24" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="24" cy="24" r="4" fill="white"/>
-  <text x="24" y="40" font-family="Arial" font-size="8" fill="white" text-anchor="middle">DNS</text>
-</svg>
