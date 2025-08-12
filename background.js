@@ -251,7 +251,7 @@ async function enableBlocking() {
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
-      
+
       // Analytics and Tracking
       {
         id: 6,
@@ -280,7 +280,7 @@ async function enableBlocking() {
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
-      
+
       // Amazon Ads
       {
         id: 9,
@@ -300,7 +300,7 @@ async function enableBlocking() {
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
-      
+
       // Other major ad networks
       {
         id: 11,
@@ -361,10 +361,16 @@ async function enableBlocking() {
         action: { type: "allow" },
         condition: {
           initiatorDomains: [domain],
-          resourceTypes: ["script", "xmlhttprequest", "image", "main_frame", "sub_frame"],
+          resourceTypes: [
+            "script",
+            "xmlhttprequest",
+            "image",
+            "main_frame",
+            "sub_frame",
+          ],
         },
       });
-      
+
       // Also allow requests TO the whitelisted domain
       allowRules.push({
         id: ruleId++,
@@ -372,7 +378,13 @@ async function enableBlocking() {
         action: { type: "allow" },
         condition: {
           requestDomains: [domain],
-          resourceTypes: ["script", "xmlhttprequest", "image", "main_frame", "sub_frame"],
+          resourceTypes: [
+            "script",
+            "xmlhttprequest",
+            "image",
+            "main_frame",
+            "sub_frame",
+          ],
         },
       });
     });
@@ -381,9 +393,10 @@ async function enableBlocking() {
 
     // First, remove ALL existing dynamic rules to ensure clean state
     try {
-      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+      const existingRules =
+        await chrome.declarativeNetRequest.getDynamicRules();
       const existingRuleIds = existingRules.map((rule) => rule.id);
-      
+
       if (existingRuleIds.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
           removeRuleIds: existingRuleIds,
@@ -710,14 +723,14 @@ function shouldBlockUrl(url) {
     "googletagmanager.com",
     "google-analytics.com",
     "googleadservices.com",
-    
+
     // Social Media Tracking
     "facebook.com/tr",
-    
+
     // Amazon Ads
     "adsystem.amazon.com",
     "amazon-adsystem.com",
-    
+
     // Other major ad networks
     "adsystem.com",
     "adscdn.com",

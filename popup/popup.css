@@ -15,7 +15,8 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
   width: 350px;
   background: var(--background);
   color: var(--primary);
@@ -180,7 +181,7 @@ body {
   font-weight: 500;
   color: var(--primary);
   margin-bottom: 2px;
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-family: "Monaco", "Menlo", "Courier New", monospace;
 }
 
 .site-status {
@@ -506,7 +507,7 @@ body {
   margin-bottom: 8px;
   border-radius: 6px;
   font-size: 12px;
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-family: "Monaco", "Menlo", "Courier New", monospace;
   border: 1px solid var(--border);
   background: var(--surface);
   transition: background-color 0.2s ease;

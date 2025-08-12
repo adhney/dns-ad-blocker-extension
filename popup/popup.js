@@ -850,10 +850,13 @@ async function testBlocking() {
     // Test 1: Try to load Google Ads script
     setTimeout(() => {
       try {
-        fetch("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", {
-          method: "HEAD",
-          mode: "no-cors",
-        })
+        fetch(
+          "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js",
+          {
+            method: "HEAD",
+            mode: "no-cors",
+          }
+        )
           .then(() => {
             googleAdsTest.textContent = "Allowed";
             googleAdsTest.className = "test-status allowed";
