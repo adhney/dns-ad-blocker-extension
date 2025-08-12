@@ -204,7 +204,8 @@ async function enableBlocking() {
     );
 
     // Create basic blocking rules for common ad domains
-    const rules = [
+    const blockingRules = [
+      // Google Ads
       {
         id: 1,
         priority: 1,
@@ -228,7 +229,7 @@ async function enableBlocking() {
         priority: 1,
         action: { type: "block" },
         condition: {
-          urlFilter: "*://*.facebook.com/tr*",
+          urlFilter: "*://ads.google.com/*",
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
@@ -237,7 +238,7 @@ async function enableBlocking() {
         priority: 1,
         action: { type: "block" },
         condition: {
-          urlFilter: "*://ads.google.com/*",
+          urlFilter: "*://*.googleadservices.com/*",
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
@@ -246,19 +247,160 @@ async function enableBlocking() {
         priority: 1,
         action: { type: "block" },
         condition: {
+          urlFilter: "*://*.googletagmanager.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      
+      // Analytics and Tracking
+      {
+        id: 6,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
           urlFilter: "*://*.analytics.google.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 7,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.google-analytics.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 8,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.facebook.com/tr*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      
+      // Amazon Ads
+      {
+        id: 9,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.amazon-adsystem.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 10,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://adsystem.amazon.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      
+      // Other major ad networks
+      {
+        id: 11,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.adsystem.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 12,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.adscdn.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 13,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.2mdn.net/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 14,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.adsrvr.org/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
+      {
+        id: 15,
+        priority: 1,
+        action: { type: "block" },
+        condition: {
+          urlFilter: "*://*.adnxs.com/*",
           resourceTypes: ["script", "xmlhttprequest", "image"],
         },
       },
     ];
 
-    // Add rules using declarativeNetRequest
-    await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: rules.map((rule) => rule.id),
-      addRules: rules,
+    // Create allowlist rules for whitelisted sites (higher priority)
+    const allowRules = [];
+    let ruleId = 100; // Start allowlist rules at ID 100 to avoid conflicts
+
+    extensionState.whitelistedSites.forEach((domain) => {
+      // Add allow rules for each whitelisted domain with higher priority
+      allowRules.push({
+        id: ruleId++,
+        priority: 10, // Higher priority than blocking rules
+        action: { type: "allow" },
+        condition: {
+          initiatorDomains: [domain],
+          resourceTypes: ["script", "xmlhttprequest", "image", "main_frame", "sub_frame"],
+        },
+      });
+      
+      // Also allow requests TO the whitelisted domain
+      allowRules.push({
+        id: ruleId++,
+        priority: 10,
+        action: { type: "allow" },
+        condition: {
+          requestDomains: [domain],
+          resourceTypes: ["script", "xmlhttprequest", "image", "main_frame", "sub_frame"],
+        },
+      });
     });
 
-    console.log("Blocking rules enabled:", rules.length);
+    const allRules = [...blockingRules, ...allowRules];
+
+    // First, remove ALL existing dynamic rules to ensure clean state
+    try {
+      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+      const existingRuleIds = existingRules.map((rule) => rule.id);
+      
+      if (existingRuleIds.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: existingRuleIds,
+        });
+      }
+    } catch (error) {
+      console.log("No existing rules to remove or error removing:", error);
+    }
+
+    // Add rules using declarativeNetRequest
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      addRules: allRules,
+    });
+
+    console.log("Blocking rules enabled:", blockingRules.length);
+    console.log("Allowlist rules for whitelisted sites:", allowRules.length);
+    console.log("Whitelisted sites:", extensionState.whitelistedSites);
   } catch (error) {
     console.error("Error enabling blocking:", error);
     throw error;
@@ -337,11 +479,19 @@ async function toggleSiteProtection(domain) {
 
     await saveState();
 
+    // Reload blocking rules to apply whitelist changes
+    if (extensionState.enabled) {
+      await enableBlocking();
+      console.log("Blocking rules reloaded after site protection toggle");
+    }
+
     console.log(
       "Site protection toggled for",
       domain,
       "- Whitelisted:",
-      isWhitelisted
+      isWhitelisted,
+      "- Total whitelisted sites:",
+      extensionState.whitelistedSites.length
     );
 
     return {
@@ -501,7 +651,8 @@ function getDefaultLists() {
     {
       name: "Steven Black's Unified Hosts + Social",
       url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social/hosts",
-      description: "Base protection + social media blocking (Facebook, Twitter, etc.)",
+      description:
+        "Base protection + social media blocking (Facebook, Twitter, etc.)",
     },
     {
       name: "Steven Black's Unified Hosts + Gambling",
@@ -551,16 +702,28 @@ function addRequestToLog(url, status, details = {}) {
 function shouldBlockUrl(url) {
   const urlLower = url.toLowerCase();
   const blockedDomains = [
+    // Google Ads and Analytics
     "doubleclick.net",
     "googlesyndication.com",
-    "facebook.com/tr",
     "ads.google.com",
     "analytics.google.com",
     "googletagmanager.com",
     "google-analytics.com",
     "googleadservices.com",
+    
+    // Social Media Tracking
+    "facebook.com/tr",
+    
+    // Amazon Ads
     "adsystem.amazon.com",
     "amazon-adsystem.com",
+    
+    // Other major ad networks
+    "adsystem.com",
+    "adscdn.com",
+    "2mdn.net",
+    "adsrvr.org",
+    "adnxs.com",
   ];
 
   return blockedDomains.some((domain) => urlLower.includes(domain));

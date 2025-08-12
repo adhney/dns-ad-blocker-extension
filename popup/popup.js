@@ -329,15 +329,18 @@ function setupEventListeners() {
       try {
         chrome.runtime.openOptionsPage(() => {
           if (chrome.runtime.lastError) {
-            console.error('Error opening options page:', chrome.runtime.lastError);
+            console.error(
+              "Error opening options page:",
+              chrome.runtime.lastError
+            );
             showMessage("Error opening settings page", "error");
           } else {
-            console.log('Options page opened successfully');
+            console.log("Options page opened successfully");
             // Don't show success message as popup will close
           }
         });
       } catch (error) {
-        console.error('Settings button error:', error);
+        console.error("Settings button error:", error);
         showMessage("Settings page not available", "error");
       }
     });
@@ -414,8 +417,16 @@ function setupEventListeners() {
 
   const filterType = document.getElementById("filterType");
   if (filterType) {
-    filterType.addEventListener("change", function () {
+    filterType.addEventListener("change", async function () {
       currentFilter = filterType.value; // Update current filter
+
+      // Save filter preference
+      try {
+        await chrome.storage.local.set({ logFilter: currentFilter });
+      } catch (error) {
+        console.log("Could not save filter preference:", error);
+      }
+
       updateLogDisplay(currentFilter);
     });
   }
@@ -451,15 +462,18 @@ function setupEventListeners() {
       try {
         chrome.runtime.openOptionsPage(() => {
           if (chrome.runtime.lastError) {
-            console.error('Error opening options page:', chrome.runtime.lastError);
+            console.error(
+              "Error opening options page:",
+              chrome.runtime.lastError
+            );
             showMessage("Error opening options page", "error");
           } else {
-            console.log('Options page opened successfully');
+            console.log("Options page opened successfully");
             // Don't show success message as popup will close
           }
         });
       } catch (error) {
-        console.error('Options button error:', error);
+        console.error("Options button error:", error);
         showMessage("Options page not available", "error");
       }
     });
@@ -474,19 +488,38 @@ function setupEventListeners() {
   if (aboutBtn) {
     aboutBtn.addEventListener("click", function () {
       const stats = extensionData?.statistics;
-      const activeBlocklists = extensionData?.blockLists?.filter(list => list.enabled).length || 0;
-      
+      const activeBlocklists =
+        extensionData?.blockLists?.filter((list) => list.enabled).length || 0;
+
       showMessage(
-        `DNS Ad Blocker v1.2 | ${activeBlocklists} active blocklists | ${stats?.blockedRequests || 0} blocked today`,
+        `DNS Ad Blocker v1.2 | ${activeBlocklists} active blocklists | ${
+          stats?.blockedRequests || 0
+        } blocked today`,
         "success"
       );
     });
+  }
+
+  // Test blocking button
+  const testBlockingBtn = document.getElementById("testBlockingBtn");
+  if (testBlockingBtn) {
+    testBlockingBtn.addEventListener("click", testBlocking);
   }
 }
 
 // Request Log Functions
 async function initializeRequestLog() {
   console.log("Initializing request log...");
+
+  // Load saved filter preference
+  try {
+    const saved = await chrome.storage.local.get(["logFilter"]);
+    if (saved.logFilter) {
+      currentFilter = saved.logFilter;
+    }
+  } catch (error) {
+    console.log("No saved filter preference, using default");
+  }
 
   // Load real request log from background script
   try {
@@ -534,10 +567,11 @@ function openLogView() {
     mainView.style.display = "none";
     logView.classList.remove("hidden");
     logViewOpen = true;
-    currentFilter = "all"; // Reset filter when opening
+
+    // Set filter select to saved preference instead of resetting
     const filterSelect = document.getElementById("filterType");
     if (filterSelect) {
-      filterSelect.value = "all";
+      filterSelect.value = currentFilter;
     }
     updateLogDisplay(currentFilter);
   }
@@ -730,28 +764,31 @@ function updateBlocklistSummary() {
   container.innerHTML = html;
 
   // Add click handlers for toggle buttons
-  container.querySelectorAll('.blocklist-toggle').forEach(button => {
-    button.addEventListener('click', async function(e) {
+  container.querySelectorAll(".blocklist-toggle").forEach((button) => {
+    button.addEventListener("click", async function (e) {
       e.stopPropagation();
       const index = parseInt(this.dataset.index);
-      
+
       try {
-        const result = await sendMessage({ action: 'toggleBlocklist', index: index });
+        const result = await sendMessage({
+          action: "toggleBlocklist",
+          index: index,
+        });
         if (result && result.success) {
           // Get updated status and refresh UI
-          const status = await sendMessage({ action: 'getStatus' });
+          const status = await sendMessage({ action: "getStatus" });
           if (status && status.success) {
             extensionData = status;
             updateUI(status);
             updateBlocklistSummary(); // Refresh the list
           }
-          showMessage(result.message || 'Blocklist toggled', 'success');
+          showMessage(result.message || "Blocklist toggled", "success");
         } else {
-          showMessage('Failed to toggle blocklist', 'error');
+          showMessage("Failed to toggle blocklist", "error");
         }
       } catch (error) {
-        console.error('Error toggling blocklist:', error);
-        showMessage('Error: ' + error.message, 'error');
+        console.error("Error toggling blocklist:", error);
+        showMessage("Error: " + error.message, "error");
       }
     });
   });
@@ -787,6 +824,101 @@ function exportStatistics() {
   URL.revokeObjectURL(url);
 
   showMessage("Statistics exported successfully", "success");
+}
+
+// Test blocking functionality
+async function testBlocking() {
+  const testResults = document.getElementById("testResults");
+  const googleAdsTest = document.getElementById("googleAdsTest");
+  const analyticsTest = document.getElementById("analyticsTest");
+  const whitelistTest = document.getElementById("whitelistTest");
+
+  if (!testResults) return;
+
+  // Show test results
+  testResults.classList.remove("hidden");
+
+  // Reset all statuses
+  googleAdsTest.textContent = "Testing...";
+  googleAdsTest.className = "test-status testing";
+  analyticsTest.textContent = "Testing...";
+  analyticsTest.className = "test-status testing";
+  whitelistTest.textContent = "Testing...";
+  whitelistTest.className = "test-status testing";
+
+  try {
+    // Test 1: Try to load Google Ads script
+    setTimeout(() => {
+      try {
+        fetch("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", {
+          method: "HEAD",
+          mode: "no-cors",
+        })
+          .then(() => {
+            googleAdsTest.textContent = "Allowed";
+            googleAdsTest.className = "test-status allowed";
+          })
+          .catch(() => {
+            googleAdsTest.textContent = "Blocked";
+            googleAdsTest.className = "test-status blocked";
+          });
+      } catch (error) {
+        googleAdsTest.textContent = "Blocked";
+        googleAdsTest.className = "test-status blocked";
+      }
+    }, 100);
+
+    // Test 2: Try to load Google Analytics
+    setTimeout(() => {
+      try {
+        fetch("https://www.google-analytics.com/analytics.js", {
+          method: "HEAD",
+          mode: "no-cors",
+        })
+          .then(() => {
+            analyticsTest.textContent = "Allowed";
+            analyticsTest.className = "test-status allowed";
+          })
+          .catch(() => {
+            analyticsTest.textContent = "Blocked";
+            analyticsTest.className = "test-status blocked";
+          });
+      } catch (error) {
+        analyticsTest.textContent = "Blocked";
+        analyticsTest.className = "test-status blocked";
+      }
+    }, 200);
+
+    // Test 3: Check if current site is whitelisted
+    setTimeout(() => {
+      if (currentTab && currentTab.url && currentTab.url.startsWith("http")) {
+        try {
+          const url = new URL(currentTab.url);
+          const domain = url.hostname;
+          const isWhitelisted =
+            extensionData?.whitelistedSites?.includes(domain) || false;
+
+          whitelistTest.textContent = isWhitelisted
+            ? "Site Whitelisted"
+            : "Site Protected";
+          whitelistTest.className = isWhitelisted
+            ? "test-status allowed"
+            : "test-status blocked";
+        } catch (error) {
+          whitelistTest.textContent = "No Site";
+          whitelistTest.className = "test-status testing";
+        }
+      } else {
+        whitelistTest.textContent = "No Site";
+        whitelistTest.className = "test-status testing";
+      }
+    }, 300);
+
+    showMessage("Running blocking tests...", "success");
+  } catch (error) {
+    console.error("Error testing blocking:", error);
+    showMessage("Error running tests: " + error.message, "error");
+  }
 }
 
 // Wait for DOM to load

@@ -572,3 +572,56 @@ body {
   color: var(--muted);
   font-weight: 400;
 }
+
+/* Test Section Styles */
+.test-section {
+  margin-top: 8px;
+}
+
+.test-results {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.test-results.hidden {
+  display: none;
+}
+
+.test-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.test-item:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.test-status {
+  font-weight: 500;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.test-status.blocked {
+  background: #ef4444;
+  color: white;
+}
+
+.test-status.allowed {
+  background: #22c55e;
+  color: white;
+}
+
+.test-status.testing {
+  background: var(--muted);
+  color: white;
+}
