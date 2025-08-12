@@ -44,11 +44,13 @@ The extension will be available on the Chrome Web Store once reviewed and approv
 ### Adding Custom Blocklists
 
 #### By URL
+
 1. Go to Options → Add Blocklist
 2. Enter a name and URL for the blocklist
 3. Click "Add List"
 
 #### By File Import
+
 1. Go to Options → Import from File
 2. Select a text file containing domains (one per line)
 3. Click "Import"
@@ -56,6 +58,7 @@ The extension will be available on the Chrome Web Store once reviewed and approv
 ### Monitoring Performance
 
 The popup shows real-time statistics:
+
 - **Requests Blocked**: Total number of blocked requests
 - **Total Requests**: All DNS requests processed
 - **Block Percentage**: Percentage of requests blocked
@@ -65,6 +68,7 @@ The popup shows real-time statistics:
 The extension supports multiple blocklist formats:
 
 ### Simple Domain List
+
 ```
 example.com
 ads.example.com
@@ -72,12 +76,14 @@ tracker.domain.com
 ```
 
 ### Hosts File Format
+
 ```
 127.0.0.1 ads.example.com
 0.0.0.0 tracker.domain.com
 ```
 
 ### With Comments
+
 ```
 # This is a comment
 ads.example.com
@@ -115,6 +121,7 @@ The extension includes several built-in lists:
 ## Privacy
 
 This extension:
+
 - ✅ Blocks ads and trackers to improve your privacy
 - ✅ Works locally without sending data to external servers
 - ✅ Stores all settings and blocklists locally
@@ -140,6 +147,7 @@ This extension:
 ### Websites Not Loading
 
 Some legitimate websites might be blocked:
+
 1. Check if the domain is in your blocklists
 2. Temporarily disable the extension to test
 3. Remove or modify problematic blocklists

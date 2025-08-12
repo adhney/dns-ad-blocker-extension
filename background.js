@@ -1,79 +1,153 @@
 // DNS Ad Blocker Background Service Worker
-console.log('DNS Ad Blocker background script loading...');
+console.log("DNS Ad Blocker background script loading...");
 
 // Extension state
 let extensionState = {
   enabled: false,
   statistics: {
-    blockedRequests: 247,
-    totalRequests: 1432,
-    sessionsBlocked: 12
+    blockedRequests: 0,
+    totalRequests: 0,
+    sessionsBlocked: 0,
   },
   blockLists: [
-    { name: 'EasyList', enabled: true, url: 'https://easylist.to/easylist/easylist.txt' },
-    { name: 'AdBlock Plus', enabled: true, url: 'https://easylist.to/easylist/easyprivacy.txt' },
-    { name: 'uBlock Origin', enabled: false, url: 'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt' }
+    {
+      name: "EasyList",
+      enabled: true,
+      url: "https://easylist.to/easylist/easylist.txt",
+    },
+    {
+      name: "EasyPrivacy",
+      enabled: true,
+      url: "https://easylist.to/easylist/easyprivacy.txt",
+    },
+    {
+      name: "uBlock Origin",
+      enabled: true,
+      url: "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt",
+    },
+    {
+      name: "Steven Black",
+      enabled: true,
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+    },
   ],
   whitelistedSites: [],
-  currentTab: null
+  currentTab: null,
 };
+
+// Request log storage
+let requestLog = [];
+const MAX_LOG_ENTRIES = 1000;
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('DNS Ad Blocker installed');
-  
+  console.log("DNS Ad Blocker installed");
+
   // Load saved state
   try {
-    const saved = await chrome.storage.local.get(['extensionState']);
+    const saved = await chrome.storage.local.get(["extensionState"]);
     if (saved.extensionState) {
       extensionState = { ...extensionState, ...saved.extensionState };
     }
   } catch (error) {
-    console.error('Error loading saved state:', error);
+    console.error("Error loading saved state:", error);
   }
-  
+
   // Set initial badge
   updateBadge();
-  
+
   // Load default block rules
   await loadBlockingRules();
 });
 
 // Message handler for popup communication
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Background received message:', message);
-  
+  console.log("Background received message:", message);
+
   switch (message.action) {
-    case 'getStatus':
+    case "getStatus":
       sendResponse({
         success: true,
         enabled: extensionState.enabled,
         statistics: extensionState.statistics,
         blockLists: extensionState.blockLists,
-        currentTab: extensionState.currentTab
+        whitelistedSites: extensionState.whitelistedSites,
+        currentTab: extensionState.currentTab,
       });
       break;
-      
-    case 'toggleProxy':
+
+    case "getRequestLog":
+      sendResponse({
+        success: true,
+        requestLog: requestLog.slice(0, message.limit || 100),
+      });
+      break;
+
+    case "clearRequestLog":
+      requestLog = [];
+      sendResponse({
+        success: true,
+        message: "Request log cleared",
+      });
+      break;
+
+    case "toggleProxy":
       toggleExtension()
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
       return true; // Async response
-      
-    case 'resetStatistics':
+
+    case "resetStatistics":
       resetStatistics()
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
       return true; // Async response
-      
-    case 'toggleSiteProtection':
+
+    case "toggleSiteProtection":
       toggleSiteProtection(message.domain)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
       return true; // Async response
-      
+
+    case "toggleBlocklist":
+      toggleBlocklist(message.index)
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
+      return true; // Async response
+
+    case "addBlocklist":
+      addBlocklist(message.name, message.url)
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
+      return true; // Async response
+
+    case "removeBlocklist":
+      removeBlocklist(message.index)
+        .then((result) => sendResponse(result))
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
+      return true; // Async response
+
+    case "getDefaultLists":
+      sendResponse({
+        success: true,
+        defaultLists: getDefaultLists(),
+      });
+      break;
+
     default:
-      sendResponse({ success: false, error: 'Unknown action' });
+      sendResponse({ success: false, error: "Unknown action" });
   }
 });
 
@@ -81,25 +155,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function toggleExtension() {
   try {
     extensionState.enabled = !extensionState.enabled;
-    
+
     if (extensionState.enabled) {
       await enableBlocking();
     } else {
       await disableBlocking();
     }
-    
+
     await saveState();
     updateBadge();
-    
-    console.log('Extension toggled:', extensionState.enabled ? 'ON' : 'OFF');
-    
+
+    console.log("Extension toggled:", extensionState.enabled ? "ON" : "OFF");
+
     return {
       success: true,
       enabled: extensionState.enabled,
-      message: extensionState.enabled ? 'DNS Ad Blocker enabled' : 'DNS Ad Blocker disabled'
+      message: extensionState.enabled
+        ? "DNS Ad Blocker enabled"
+        : "DNS Ad Blocker disabled",
     };
   } catch (error) {
-    console.error('Error toggling extension:', error);
+    console.error("Error toggling extension:", error);
     return { success: false, error: error.message };
   }
 }
@@ -108,66 +184,68 @@ async function toggleExtension() {
 async function enableBlocking() {
   try {
     // Get enabled block lists
-    const enabledLists = extensionState.blockLists.filter(list => list.enabled);
-    
+    const enabledLists = extensionState.blockLists.filter(
+      (list) => list.enabled
+    );
+
     // Create basic blocking rules for common ad domains
     const rules = [
       {
         id: 1,
         priority: 1,
-        action: { type: 'block' },
+        action: { type: "block" },
         condition: {
-          urlFilter: '*://*.doubleclick.net/*',
-          resourceTypes: ['script', 'xmlhttprequest', 'image']
-        }
+          urlFilter: "*://*.doubleclick.net/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
       },
       {
         id: 2,
         priority: 1,
-        action: { type: 'block' },
+        action: { type: "block" },
         condition: {
-          urlFilter: '*://*.googlesyndication.com/*',
-          resourceTypes: ['script', 'xmlhttprequest', 'image']
-        }
+          urlFilter: "*://*.googlesyndication.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
       },
       {
         id: 3,
         priority: 1,
-        action: { type: 'block' },
+        action: { type: "block" },
         condition: {
-          urlFilter: '*://*.facebook.com/tr*',
-          resourceTypes: ['script', 'xmlhttprequest', 'image']
-        }
+          urlFilter: "*://*.facebook.com/tr*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
       },
       {
         id: 4,
         priority: 1,
-        action: { type: 'block' },
+        action: { type: "block" },
         condition: {
-          urlFilter: '*://ads.google.com/*',
-          resourceTypes: ['script', 'xmlhttprequest', 'image']
-        }
+          urlFilter: "*://ads.google.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
       },
       {
         id: 5,
         priority: 1,
-        action: { type: 'block' },
+        action: { type: "block" },
         condition: {
-          urlFilter: '*://*.analytics.google.com/*',
-          resourceTypes: ['script', 'xmlhttprequest', 'image']
-        }
-      }
+          urlFilter: "*://*.analytics.google.com/*",
+          resourceTypes: ["script", "xmlhttprequest", "image"],
+        },
+      },
     ];
-    
+
     // Add rules using declarativeNetRequest
     await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: rules.map(rule => rule.id),
-      addRules: rules
+      removeRuleIds: rules.map((rule) => rule.id),
+      addRules: rules,
     });
-    
-    console.log('Blocking rules enabled:', rules.length);
+
+    console.log("Blocking rules enabled:", rules.length);
   } catch (error) {
-    console.error('Error enabling blocking:', error);
+    console.error("Error enabling blocking:", error);
     throw error;
   }
 }
@@ -177,17 +255,17 @@ async function disableBlocking() {
   try {
     // Remove all dynamic rules
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-    const ruleIds = existingRules.map(rule => rule.id);
-    
+    const ruleIds = existingRules.map((rule) => rule.id);
+
     if (ruleIds.length > 0) {
       await chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: ruleIds
+        removeRuleIds: ruleIds,
       });
     }
-    
-    console.log('Blocking rules disabled');
+
+    console.log("Blocking rules disabled");
   } catch (error) {
-    console.error('Error disabling blocking:', error);
+    console.error("Error disabling blocking:", error);
     throw error;
   }
 }
@@ -205,21 +283,21 @@ async function resetStatistics() {
     extensionState.statistics = {
       blockedRequests: 0,
       totalRequests: 0,
-      sessionsBlocked: 0
+      sessionsBlocked: 0,
     };
-    
+
     await saveState();
     updateBadge();
-    
-    console.log('Statistics reset');
-    
+
+    console.log("Statistics reset");
+
     return {
       success: true,
       statistics: extensionState.statistics,
-      message: 'Statistics reset successfully'
+      message: "Statistics reset successfully",
     };
   } catch (error) {
-    console.error('Error resetting statistics:', error);
+    console.error("Error resetting statistics:", error);
     return { success: false, error: error.message };
   }
 }
@@ -228,12 +306,12 @@ async function resetStatistics() {
 async function toggleSiteProtection(domain) {
   try {
     if (!domain) {
-      throw new Error('No domain provided');
+      throw new Error("No domain provided");
     }
-    
+
     const index = extensionState.whitelistedSites.indexOf(domain);
     let isWhitelisted;
-    
+
     if (index > -1) {
       extensionState.whitelistedSites.splice(index, 1);
       isWhitelisted = false;
@@ -241,43 +319,230 @@ async function toggleSiteProtection(domain) {
       extensionState.whitelistedSites.push(domain);
       isWhitelisted = true;
     }
-    
+
     await saveState();
-    
-    console.log('Site protection toggled for', domain, '- Whitelisted:', isWhitelisted);
-    
+
+    console.log(
+      "Site protection toggled for",
+      domain,
+      "- Whitelisted:",
+      isWhitelisted
+    );
+
     return {
       success: true,
       domain: domain,
       whitelisted: isWhitelisted,
-      message: isWhitelisted ? 
-        `Protection disabled for ${domain}` : 
-        `Protection enabled for ${domain}`
+      message: isWhitelisted
+        ? `Protection disabled for ${domain}`
+        : `Protection enabled for ${domain}`,
     };
   } catch (error) {
-    console.error('Error toggling site protection:', error);
+    console.error("Error toggling site protection:", error);
     return { success: false, error: error.message };
   }
 }
 
 // Update badge with blocked count
 function updateBadge() {
-  const text = extensionState.enabled ? 
-    extensionState.statistics.blockedRequests.toString() : 'OFF';
-  
+  const text = extensionState.enabled
+    ? extensionState.statistics.blockedRequests.toString()
+    : "OFF";
+
   chrome.action.setBadgeText({ text });
-  chrome.action.setBadgeBackgroundColor({ 
-    color: extensionState.enabled ? '#22c55e' : '#ef4444' 
+  chrome.action.setBadgeBackgroundColor({
+    color: extensionState.enabled ? "#22c55e" : "#ef4444",
   });
+}
+
+// Toggle blocklist enabled/disabled state
+async function toggleBlocklist(index) {
+  try {
+    if (index < 0 || index >= extensionState.blockLists.length) {
+      throw new Error("Invalid blocklist index");
+    }
+
+    extensionState.blockLists[index].enabled =
+      !extensionState.blockLists[index].enabled;
+
+    await saveState();
+
+    // Reload blocking rules if extension is enabled
+    if (extensionState.enabled) {
+      await loadBlockingRules();
+    }
+
+    console.log("Blocklist toggled:", extensionState.blockLists[index]);
+
+    return {
+      success: true,
+      blockLists: extensionState.blockLists,
+      message: `Blocklist ${
+        extensionState.blockLists[index].enabled ? "enabled" : "disabled"
+      }`,
+    };
+  } catch (error) {
+    console.error("Error toggling blocklist:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Add new blocklist
+async function addBlocklist(name, url) {
+  try {
+    if (!name || !url) {
+      throw new Error("Name and URL are required");
+    }
+
+    // Check if URL already exists
+    const existingList = extensionState.blockLists.find(
+      (list) => list.url === url
+    );
+    if (existingList) {
+      throw new Error("Blocklist with this URL already exists");
+    }
+
+    // Add new blocklist
+    const newList = {
+      name: name.trim(),
+      url: url.trim(),
+      enabled: true,
+    };
+
+    extensionState.blockLists.push(newList);
+
+    await saveState();
+
+    // Reload blocking rules if extension is enabled
+    if (extensionState.enabled) {
+      await loadBlockingRules();
+    }
+
+    console.log("Blocklist added:", newList);
+
+    return {
+      success: true,
+      blockLists: extensionState.blockLists,
+      message: `Added ${name} successfully`,
+    };
+  } catch (error) {
+    console.error("Error adding blocklist:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Remove blocklist
+async function removeBlocklist(index) {
+  try {
+    if (index < 0 || index >= extensionState.blockLists.length) {
+      throw new Error("Invalid blocklist index");
+    }
+
+    const removedList = extensionState.blockLists.splice(index, 1)[0];
+
+    await saveState();
+
+    // Reload blocking rules if extension is enabled
+    if (extensionState.enabled) {
+      await loadBlockingRules();
+    }
+
+    console.log("Blocklist removed:", removedList);
+
+    return {
+      success: true,
+      blockLists: extensionState.blockLists,
+      message: `Removed ${removedList.name} successfully`,
+    };
+  } catch (error) {
+    console.error("Error removing blocklist:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get default/recommended blocklists
+function getDefaultLists() {
+  return [
+    {
+      name: "EasyList",
+      url: "https://easylist.to/easylist/easylist.txt",
+      description: "Most popular general purpose ad blocking filter list",
+    },
+    {
+      name: "EasyPrivacy",
+      url: "https://easylist.to/easylist/easyprivacy.txt",
+      description: "Blocks tracking scripts and other privacy invasions",
+    },
+    {
+      name: "uBlock Origin Filters",
+      url: "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt",
+      description: "Additional filters from the uBlock Origin project",
+    },
+    {
+      name: "Steven Black's Unified Hosts",
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+      description: "Unified hosts file with base adware + malware protection",
+    },
+    {
+      name: "Peter Lowe's Ad and tracking server list",
+      url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+      description: "A comprehensive list of ad and tracking servers",
+    },
+    {
+      name: "Malware Domain List",
+      url: "https://www.malwaredomainlist.com/hostslist/hosts.txt",
+      description: "Blocks domains hosting malware and malicious content",
+    },
+  ];
+}
+
+// Helper function to add request to log
+function addRequestToLog(url, status, details = {}) {
+  const entry = {
+    url: url,
+    status: status, // 'blocked' or 'allowed'
+    time: new Date(),
+    type: details.type || "unknown",
+    tabId: details.tabId || null,
+    initiator: details.initiator || null,
+  };
+
+  requestLog.unshift(entry);
+
+  // Keep only recent entries
+  if (requestLog.length > MAX_LOG_ENTRIES) {
+    requestLog = requestLog.slice(0, MAX_LOG_ENTRIES);
+  }
+
+  console.log("Request logged:", entry.status, entry.url.substring(0, 100));
+}
+
+// Check if URL should be blocked
+function shouldBlockUrl(url) {
+  const urlLower = url.toLowerCase();
+  const blockedDomains = [
+    "doubleclick.net",
+    "googlesyndication.com",
+    "facebook.com/tr",
+    "ads.google.com",
+    "analytics.google.com",
+    "googletagmanager.com",
+    "google-analytics.com",
+    "googleadservices.com",
+    "adsystem.amazon.com",
+    "amazon-adsystem.com",
+  ];
+
+  return blockedDomains.some((domain) => urlLower.includes(domain));
 }
 
 // Save state to storage
 async function saveState() {
   try {
     await chrome.storage.local.set({ extensionState });
-    console.log('State saved');
+    console.log("State saved");
   } catch (error) {
-    console.error('Error saving state:', error);
+    console.error("Error saving state:", error);
   }
 }
 
@@ -285,49 +550,84 @@ async function saveState() {
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (tab.url && tab.url.startsWith('http')) {
+    if (tab.url && tab.url.startsWith("http")) {
       const url = new URL(tab.url);
       extensionState.currentTab = {
         id: tab.id,
         url: tab.url,
         domain: url.hostname,
-        title: tab.title
+        title: tab.title,
       };
     }
   } catch (error) {
-    console.error('Error tracking active tab:', error);
+    console.error("Error tracking active tab:", error);
   }
 });
 
-// Listen for web requests to update statistics
+// Listen for web requests to update statistics and log
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (extensionState.enabled) {
       extensionState.statistics.totalRequests++;
-      
-      // Check if this would be blocked
-      const url = details.url.toLowerCase();
-      const blockedDomains = [
-        'doubleclick.net',
-        'googlesyndication.com',
-        'facebook.com/tr',
-        'ads.google.com',
-        'analytics.google.com'
-      ];
-      
-      if (blockedDomains.some(domain => url.includes(domain))) {
+
+      // Check if this request should be blocked
+      const shouldBlock = shouldBlockUrl(details.url);
+
+      // Add to request log
+      addRequestToLog(details.url, shouldBlock ? "blocked" : "allowed", {
+        type: details.type,
+        tabId: details.tabId,
+        initiator: details.initiator,
+      });
+
+      // If it would be blocked, increment blocked count
+      if (shouldBlock) {
         extensionState.statistics.blockedRequests++;
         updateBadge();
       }
-      
+
       // Save state periodically
       if (extensionState.statistics.totalRequests % 10 === 0) {
         saveState();
       }
     }
   },
-  { urls: ['<all_urls>'] },
-  ['requestBody']
+  { urls: ["<all_urls>"] },
+  ["requestBody"]
 );
 
-console.log('DNS Ad Blocker background script loaded');
+// Listen for blocked requests using declarativeNetRequest
+if (
+  chrome.declarativeNetRequest &&
+  chrome.declarativeNetRequest.onRuleMatchedDebug
+) {
+  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
+    if (extensionState.enabled && info.request) {
+      extensionState.statistics.blockedRequests++;
+      updateBadge();
+
+      // Add to request log with blocked status
+      addRequestToLog(info.request.url, "blocked", {
+        type: info.request.resourceType,
+        tabId: info.request.tabId,
+        initiator: info.request.initiator,
+      });
+
+      // Save state periodically
+      if (extensionState.statistics.blockedRequests % 5 === 0) {
+        saveState();
+      }
+
+      console.log(
+        "Blocked request via declarativeNetRequest:",
+        info.request.url
+      );
+    }
+  });
+} else {
+  console.log(
+    "declarativeNetRequest debug API not available, using webRequest fallback"
+  );
+}
+
+console.log("DNS Ad Blocker background script loaded");

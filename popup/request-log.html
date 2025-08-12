@@ -1,99 +1,136 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>DNS Ad Blocker - Request Log</title>
-  <link rel="stylesheet" href="request-log.css">
-</head>
-<body>
-  <div class="log-page">
-    <!-- Header -->
-    <div class="log-header">
-      <div class="log-title-section">
-        <h1>Request Log</h1>
-        <p class="log-subtitle">Real-time DNS filtering activity</p>
+  <head>
+    <title>DNS Ad Blocker - Request Log</title>
+    <link rel="stylesheet" href="request-log.css" />
+  </head>
+  <body>
+    <div class="log-page">
+      <!-- Header -->
+      <div class="log-header">
+        <div class="log-title-section">
+          <h1>Request Log</h1>
+          <p class="log-subtitle">Real-time DNS filtering activity</p>
+        </div>
+        <div class="log-stats">
+          <div class="stat-item">
+            <span class="stat-number" id="totalLogCount">0</span>
+            <span class="stat-label">Total Requests</span>
+          </div>
+          <div class="stat-item blocked">
+            <span class="stat-number" id="blockedLogCount">0</span>
+            <span class="stat-label">Blocked</span>
+          </div>
+          <div class="stat-item allowed">
+            <span class="stat-number" id="allowedLogCount">0</span>
+            <span class="stat-label">Allowed</span>
+          </div>
+        </div>
       </div>
-      <div class="log-stats">
-        <div class="stat-item">
-          <span class="stat-number" id="totalLogCount">0</span>
-          <span class="stat-label">Total Requests</span>
-        </div>
-        <div class="stat-item blocked">
-          <span class="stat-number" id="blockedLogCount">0</span>
-          <span class="stat-label">Blocked</span>
-        </div>
-        <div class="stat-item allowed">
-          <span class="stat-number" id="allowedLogCount">0</span>
-          <span class="stat-label">Allowed</span>
-        </div>
-      </div>
-    </div>
 
-    <!-- Controls -->
-    <div class="log-controls">
-      <div class="control-group">
-        <button id="clearLog" class="control-btn danger">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3,6 5,6 21,6"></polyline>
-            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+      <!-- Controls -->
+      <div class="log-controls">
+        <div class="control-group">
+          <button id="clearLog" class="control-btn danger">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="3,6 5,6 21,6"></polyline>
+              <path
+                d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"
+              ></path>
+            </svg>
+            Clear Log
+          </button>
+          <button id="pauseLog" class="control-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <span id="pauseText">Pause</span>
+          </button>
+        </div>
+
+        <div class="control-group">
+          <div class="filter-group">
+            <label for="filterType">Filter:</label>
+            <select id="filterType" class="filter-select">
+              <option value="all">All Requests</option>
+              <option value="blocked">Blocked Only</option>
+              <option value="allowed">Allowed Only</option>
+            </select>
+          </div>
+          <div class="search-group">
+            <input
+              type="text"
+              id="searchFilter"
+              placeholder="Search URLs..."
+              class="search-input"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Log Container -->
+      <div class="log-container" id="logContainer">
+        <div class="log-empty">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path
+              d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+            />
           </svg>
-          Clear Log
-        </button>
-        <button id="pauseLog" class="control-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="6" y="4" width="4" height="16"></rect>
-            <rect x="14" y="4" width="4" height="16"></rect>
-          </svg>
-          <span id="pauseText">Pause</span>
-        </button>
-      </div>
-      
-      <div class="control-group">
-        <div class="filter-group">
-          <label for="filterType">Filter:</label>
-          <select id="filterType" class="filter-select">
-            <option value="all">All Requests</option>
-            <option value="blocked">Blocked Only</option>
-            <option value="allowed">Allowed Only</option>
-          </select>
-        </div>
-        <div class="search-group">
-          <input type="text" id="searchFilter" placeholder="Search URLs..." class="search-input">
+          <h3>No requests logged yet</h3>
+          <p>Start browsing to see DNS filtering activity</p>
         </div>
       </div>
-    </div>
 
-    <!-- Log Container -->
-    <div class="log-container" id="logContainer">
-      <div class="log-empty">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="2" y1="12" x2="22" y2="12"/>
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-        <h3>No requests logged yet</h3>
-        <p>Start browsing to see DNS filtering activity</p>
+      <!-- Footer -->
+      <div class="log-footer">
+        <div class="footer-info">
+          <span>Auto-refresh: <span id="refreshStatus">ON</span></span>
+          <span>Last updated: <span id="lastUpdated">Never</span></span>
+        </div>
+        <div class="footer-actions">
+          <button id="exportLog" class="footer-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7,10 12,15 17,10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Footer -->
-    <div class="log-footer">
-      <div class="footer-info">
-        <span>Auto-refresh: <span id="refreshStatus">ON</span></span>
-        <span>Last updated: <span id="lastUpdated">Never</span></span>
-      </div>
-      <div class="footer-actions">
-        <button id="exportLog" class="footer-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7,10 12,15 17,10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <script src="request-log.js" type="module"></script>
-</body>
+    <script src="request-log.js" type="module"></script>
+  </body>
 </html>

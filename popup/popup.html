@@ -1,470 +1,727 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>DNS Ad Blocker</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      width: 350px;
-      min-height: 400px;
-      margin: 0;
-      padding: 0;
-      background: #ffffff;
-      color: #1f2937;
-    }
-    
-    .container {
-      padding: 16px 20px;
-    }
-    
-    .power-section {
-      display: flex;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    
-    .power-btn {
-      width: 56px;
-      height: 56px;
-      border: 3px solid #ef4444;
-      border-radius: 50%;
-      background: rgba(239, 68, 68, 0.1);
-      cursor: pointer;
-      margin-right: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    }
-    
-    .power-btn.active {
-      border-color: #22c55e;
-      background: rgba(34, 197, 94, 0.1);
-    }
-    
-    .power-icon {
-      color: #ef4444;
-      transition: color 0.2s ease;
-    }
-    
-    .power-btn.active .power-icon {
-      color: #22c55e;
-    }
-    
-    .status-text {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    
-    .status-subtext {
-      font-size: 13px;
-      color: #6b7280;
-    }
-    
-    .stats-section {
-      display: flex;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    
-    .stat-box {
-      flex: 1;
-      text-align: center;
-      padding: 16px;
-    }
-    
-    .stat-number {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    
-    .stat-box.blocked .stat-number {
-      color: #22c55e;
-    }
-    
-    .stat-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      color: #6b7280;
-    }
-    
-    .site-section {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      padding: 16px;
-      background: #f9fafb;
-      border-radius: 8px;
-    }
-    
-    .site-info {
-      display: flex;
-      align-items: center;
-    }
-    
-    .site-icon {
-      margin-right: 12px;
-      opacity: 0.7;
-    }
-    
-    .site-domain {
-      font-weight: 500;
-      margin-bottom: 2px;
-    }
-    
-    .site-status {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    
-    .site-blocked {
-      font-size: 16px;
-      font-weight: 600;
-      color: #22c55e;
-      background: rgba(34, 197, 94, 0.1);
-      padding: 4px 8px;
-      border-radius: 4px;
-    }
-    
-    .action-section {
-      display: flex;
-      margin-bottom: 8px;
-    }
-    
-    .action-btn {
-      flex: 1;
-      padding: 12px 16px;
-      background: transparent;
-      border: 1px solid #e5e7eb;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-size: 13px;
-    }
-    
-    .action-btn:hover {
-      background: #f9fafb;
-      border-color: #22c55e;
-    }
-    
-    .action-btn:active {
-      background: #22c55e;
-      color: white;
-    }
-    
-    .action-btn:first-child {
-      border-right: none;
-    }
-    
-    .message {
-      padding: 8px 16px;
-      margin-bottom: 8px;
-      border-radius: 4px;
-      text-align: center;
-      font-size: 12px;
-      animation: slideIn 0.3s ease;
-    }
-    
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .message.success {
-      background: rgba(34, 197, 94, 0.1);
-      color: #22c55e;
-      border: 1px solid rgba(34, 197, 94, 0.2);
-    }
-    
-    .message.error {
-      background: rgba(239, 68, 68, 0.1);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.2);
-    }
+  <head>
+    <meta charset="utf-8" />
+    <title>DNS Ad Blocker</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+          sans-serif;
+        width: 350px;
+        min-height: 400px;
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #1f2937;
+      }
 
-    /* Request Log View */
-    .log-view {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #ffffff;
-      display: flex;
-      flex-direction: column;
-      z-index: 100;
-    }
+      .container {
+        padding: 16px 20px;
+      }
 
-    .log-view.hidden {
-      display: none;
-    }
+      .power-section {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #e5e7eb;
+      }
 
-    .log-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e5e7eb;
-      background: #f9fafb;
-    }
+      .power-btn {
+        width: 56px;
+        height: 56px;
+        border: 3px solid #ef4444;
+        border-radius: 50%;
+        background: rgba(239, 68, 68, 0.1);
+        cursor: pointer;
+        margin-right: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+      }
 
-    .back-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: none;
-      border: none;
-      color: #1f2937;
-      cursor: pointer;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.2s ease;
-    }
+      .power-btn.active {
+        border-color: #22c55e;
+        background: rgba(34, 197, 94, 0.1);
+      }
 
-    .back-btn:hover {
-      background: #e5e7eb;
-    }
+      .power-icon {
+        color: #ef4444;
+        transition: color 0.2s ease;
+      }
 
-    .log-header h3 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1f2937;
-      margin: 0;
-    }
+      .power-btn.active .power-icon {
+        color: #22c55e;
+      }
 
-    .log-count {
-      font-size: 12px;
-      color: #6b7280;
-    }
+      .status-text {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
 
-    .log-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e5e7eb;
-      background: #ffffff;
-      flex-wrap: wrap;
-    }
+      .status-subtext {
+        font-size: 13px;
+        color: #6b7280;
+      }
 
-    .log-filters {
-      margin-left: auto;
-    }
+      .stats-section {
+        display: flex;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #e5e7eb;
+      }
 
-    .log-filters select {
-      padding: 6px 12px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 4px;
-      color: #1f2937;
-      cursor: pointer;
-      font-size: 12px;
-    }
+      .stat-box {
+        flex: 1;
+        text-align: center;
+        padding: 16px;
+      }
 
-    .log-btn {
-      padding: 6px 12px;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-      border-radius: 4px;
-      color: #1f2937;
-      cursor: pointer;
-      font-size: 12px;
-      transition: background-color 0.2s ease;
-    }
+      .stat-number {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
 
-    .log-btn:hover {
-      background: #f9fafb;
-    }
+      .stat-box.blocked .stat-number {
+        color: #22c55e;
+      }
 
-    .log-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 20px;
-      background: #ffffff;
-    }
+      .stat-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #6b7280;
+      }
 
-    .log-empty {
-      text-align: center;
-      color: #6b7280;
-      font-style: italic;
-      padding: 40px 20px;
-    }
+      .site-section {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding: 16px;
+        background: #f9fafb;
+        border-radius: 8px;
+      }
 
-    .log-entry {
-      display: flex;
-      align-items: flex-start;
-      padding: 12px;
-      margin-bottom: 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      transition: background-color 0.2s ease;
-    }
+      .site-info {
+        display: flex;
+        align-items: center;
+      }
 
-    .log-entry:hover {
-      background: #ffffff;
-    }
+      .site-icon {
+        margin-right: 12px;
+        opacity: 0.7;
+      }
 
-    .log-entry.blocked {
-      border-left: 4px solid #ef4444;
-      background: rgba(239, 68, 68, 0.05);
-    }
+      .site-domain {
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
 
-    .log-entry.allowed {
-      border-left: 4px solid #22c55e;
-      background: rgba(34, 197, 94, 0.05);
-    }
+      .site-status {
+        font-size: 11px;
+        color: #6b7280;
+      }
 
-    .log-entry-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
+      .site-blocked {
+        font-size: 16px;
+        font-weight: 600;
+        color: #22c55e;
+        background: rgba(34, 197, 94, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
 
-    .log-entry-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+      .action-section {
+        display: flex;
+        margin-bottom: 8px;
+      }
 
-    .log-url {
-      flex: 1;
-      word-break: break-all;
-      font-weight: 500;
-      color: #1f2937;
-      line-height: 1.3;
-    }
+      .action-btn {
+        flex: 1;
+        padding: 12px 16px;
+        background: transparent;
+        border: 1px solid #e5e7eb;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+      }
 
-    .log-status {
-      font-weight: 600;
-      font-size: 10px;
-      text-transform: uppercase;
-      padding: 2px 6px;
-      border-radius: 3px;
-      white-space: nowrap;
-    }
+      .action-btn:hover {
+        background: #f9fafb;
+        border-color: #22c55e;
+      }
 
-    .log-entry.blocked .log-status {
-      color: #ef4444;
-      background: rgba(239, 68, 68, 0.15);
-    }
+      .action-btn:active {
+        background: #22c55e;
+        color: white;
+      }
 
-    .log-entry.allowed .log-status {
-      color: #22c55e;
-      background: rgba(34, 197, 94, 0.15);
-    }
+      .action-btn:first-child {
+        border-right: none;
+      }
 
-    .log-time {
-      font-size: 10px;
-      color: #6b7280;
-      font-weight: 400;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <!-- Power Section -->
-    <div class="power-section">
-      <button id="powerBtn" class="power-btn" title="Toggle DNS Ad Blocker">
-        <div class="power-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M12 2v10M18.36 6.64a9 9 0 1 1-12.73 0"/>
+      .message {
+        padding: 8px 16px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 12px;
+        animation: slideIn 0.3s ease;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .message.success {
+        background: rgba(34, 197, 94, 0.1);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+
+      .message.error {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+      }
+
+      /* Request Log View */
+      .log-view {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        z-index: 100;
+      }
+
+      .log-view.hidden {
+        display: none;
+      }
+
+      .log-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+      }
+
+      .back-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: none;
+        color: #1f2937;
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s ease;
+      }
+
+      .back-btn:hover {
+        background: #e5e7eb;
+      }
+
+      .log-header h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0;
+      }
+
+      .log-count {
+        font-size: 12px;
+        color: #6b7280;
+      }
+
+      .log-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #ffffff;
+        flex-wrap: nowrap;
+      }
+
+      .log-controls-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+
+      .log-filters {
+        flex-shrink: 0;
+      }
+
+      .log-filters select {
+        padding: 8px 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        color: #1f2937;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        min-width: 120px;
+        transition: all 0.2s ease;
+      }
+
+      .log-filters select:hover {
+        background: #e5e7eb;
+        border-color: #d1d5db;
+      }
+
+      .log-filters select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      }
+
+      .log-btn {
+        padding: 8px 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        color: #1f2937;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        min-width: fit-content;
+      }
+
+      .log-btn:hover {
+        background: #e5e7eb;
+        border-color: #d1d5db;
+      }
+
+      .log-btn:active {
+        background: #d1d5db;
+        transform: translateY(1px);
+      }
+
+      .log-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px;
+        background: #ffffff;
+      }
+
+      .log-empty {
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+        padding: 40px 20px;
+      }
+
+      .log-entry {
+        display: flex;
+        align-items: flex-start;
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-family: "Monaco", "Menlo", "Courier New", monospace;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        transition: background-color 0.2s ease;
+      }
+
+      .log-entry:hover {
+        background: #ffffff;
+      }
+
+      .log-entry.blocked {
+        border-left: 4px solid #ef4444;
+        background: rgba(239, 68, 68, 0.05);
+      }
+
+      .log-entry.allowed {
+        border-left: 4px solid #22c55e;
+        background: rgba(34, 197, 94, 0.05);
+      }
+
+      .log-entry-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .log-entry-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .log-url {
+        flex: 1;
+        word-break: break-all;
+        font-weight: 500;
+        color: #1f2937;
+        line-height: 1.3;
+        cursor: help;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 250px;
+      }
+
+      .log-url:hover {
+        color: #3b82f6;
+        text-decoration: underline;
+      }
+
+      .log-status {
+        font-weight: 600;
+        font-size: 10px;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+
+      .log-entry.blocked .log-status {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.15);
+      }
+
+      .log-entry.allowed .log-status {
+        color: #22c55e;
+        background: rgba(34, 197, 94, 0.15);
+      }
+
+      .log-time {
+        font-size: 10px;
+        color: #6b7280;
+        font-weight: 400;
+      }
+
+      /* Responsive adjustments for popup */
+      @media (max-width: 400px) {
+        .log-controls {
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .log-controls-left {
+          gap: 6px;
+        }
+
+        .log-btn {
+          padding: 6px 10px;
+          font-size: 11px;
+        }
+
+        .log-filters {
+          width: 100%;
+          margin-top: 6px;
+        }
+
+        .log-filters select {
+          width: 100%;
+          padding: 6px 10px;
+          font-size: 11px;
+        }
+      }
+
+      /* More/Advanced Section Styles */
+      .more-section {
+        background: #ffffff;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      .more-toggle {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        background: transparent;
+        border: none;
+        color: #6b7280;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .more-toggle:hover {
+        background: #f9fafb;
+      }
+
+      .chevron {
+        font-size: 12px;
+        transition: transform 0.2s ease;
+      }
+
+      .more-toggle.expanded .chevron {
+        transform: rotate(180deg);
+      }
+
+      .more-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        border-top: 1px solid #e5e7eb;
+        background: #f9fafb;
+      }
+
+      .more-content.expanded {
+        max-height: 400px;
+      }
+
+      .more-group {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .more-group:last-child {
+        border-bottom: none;
+      }
+
+      .more-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+      }
+
+      /* Blocklist Summary */
+      .blocklist-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .blocklist-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #ffffff;
+        border-radius: 4px;
+        border: 1px solid #e5e7eb;
+        font-size: 12px;
+      }
+
+      .blocklist-name {
+        font-weight: 500;
+        color: #1f2937;
+      }
+
+      .blocklist-status {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        font-weight: 600;
+      }
+
+      .blocklist-status.enabled {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+
+      .blocklist-status.disabled {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+
+      .more-action {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        color: #1f2937;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        font-size: 12px;
+        margin-bottom: 6px;
+        text-align: left;
+      }
+
+      .more-action:last-child {
+        margin-bottom: 0;
+      }
+
+      .more-action:hover {
+        background: #f9fafb;
+      }
+
+      .empty-blocklists {
+        padding: 12px;
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Power Section -->
+      <div class="power-section">
+        <button id="powerBtn" class="power-btn" title="Toggle DNS Ad Blocker">
+          <div class="power-icon">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path d="M12 2v10M18.36 6.64a9 9 0 1 1-12.73 0" />
+            </svg>
+          </div>
+        </button>
+        <div class="power-text">
+          <div class="status-text">DNS Ad Blocker</div>
+          <div class="status-subtext" id="statusSubtext">Inactive</div>
+        </div>
+      </div>
+
+      <!-- Statistics -->
+      <div class="stats-section">
+        <div class="stat-box blocked">
+          <div class="stat-number" id="blockedCount">0</div>
+          <div class="stat-label">Blocked</div>
+        </div>
+        <div class="stat-box total">
+          <div class="stat-number" id="totalCount">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+      </div>
+
+      <!-- Current Site -->
+      <div class="site-section">
+        <div class="site-info">
+          <div class="site-icon">🌐</div>
+          <div class="site-details">
+            <div class="site-domain" id="siteDomain">Loading...</div>
+            <div class="site-status" id="siteStatus">Loading...</div>
+          </div>
+        </div>
+        <div class="site-stats">
+          <div class="site-blocked" id="siteBlocked">0</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="action-section">
+        <button id="toggleSiteBtn" class="action-btn">
+          <span>Disable for this site</span>
+        </button>
+        <button id="loggerBtn" class="action-btn">
+          <span>Request log</span>
+        </button>
+      </div>
+
+      <div class="action-section">
+        <button id="settingsBtn" class="action-btn">
+          <span>Settings</span>
+        </button>
+        <button id="resetBtn" class="action-btn">
+          <span>Reset Stats</span>
+        </button>
+      </div>
+
+      <!-- More/Advanced Section -->
+      <div class="more-section">
+        <button id="moreToggle" class="more-toggle">
+          <span>Advanced Options</span>
+          <span class="chevron">▼</span>
+        </button>
+        <div id="moreContent" class="more-content">
+          <div class="more-group">
+            <div class="more-title">Active Blocklists</div>
+            <div id="blocklistSummary" class="blocklist-summary">
+              <div class="empty-blocklists">Loading blocklists...</div>
+            </div>
+          </div>
+          <div class="more-group">
+            <div class="more-title">Quick Actions</div>
+            <button class="more-action" id="openOptionsBtn">
+              <span>Manage Blocklists</span>
+            </button>
+            <button class="more-action" id="exportStatsBtn">
+              <span>Export Statistics</span>
+            </button>
+            <button class="more-action" id="aboutBtn">
+              <span>About Extension</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Request Log View -->
+    <div id="logView" class="log-view hidden">
+      <div class="log-header">
+        <button id="backBtn" class="back-btn">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="m15 18-6-6 6-6" />
           </svg>
+          Back
+        </button>
+        <h3>Request Log</h3>
+        <div class="log-count">Requests: <span id="logCount">0</span></div>
+      </div>
+      <div class="log-controls">
+        <div class="log-controls-left">
+          <button id="clearLog" class="log-btn">Clear</button>
+          <button id="pauseLog" class="log-btn">Pause</button>
+          <button id="exportLog" class="log-btn">Export</button>
         </div>
-      </button>
-      <div class="power-text">
-        <div class="status-text">DNS Ad Blocker</div>
-        <div class="status-subtext" id="statusSubtext">Inactive</div>
-      </div>
-    </div>
-
-    <!-- Statistics -->
-    <div class="stats-section">
-      <div class="stat-box blocked">
-        <div class="stat-number" id="blockedCount">247</div>
-        <div class="stat-label">Blocked</div>
-      </div>
-      <div class="stat-box total">
-        <div class="stat-number" id="totalCount">1,432</div>
-        <div class="stat-label">Requests</div>
-      </div>
-    </div>
-
-    <!-- Current Site -->
-    <div class="site-section">
-      <div class="site-info">
-        <div class="site-icon">🌐</div>
-        <div class="site-details">
-          <div class="site-domain" id="siteDomain">github.com</div>
-          <div class="site-status" id="siteStatus">Protection disabled</div>
+        <div class="log-filters">
+          <select id="filterType">
+            <option value="all">All requests</option>
+            <option value="blocked">Blocked only</option>
+            <option value="allowed">Allowed only</option>
+          </select>
         </div>
       </div>
-      <div class="site-stats">
-        <div class="site-blocked" id="siteBlocked">12</div>
+      <div class="log-container" id="logContainer">
+        <div class="log-empty">Loading requests...</div>
       </div>
     </div>
 
-    <!-- Actions -->
-    <div class="action-section">
-      <button id="toggleSiteBtn" class="action-btn">
-        <span>Disable for this site</span>
-      </button>
-      <button id="loggerBtn" class="action-btn">
-        <span>Request log</span>
-      </button>
-    </div>
-    
-    <div class="action-section">
-      <button id="settingsBtn" class="action-btn">
-        <span>Settings</span>
-      </button>
-      <button id="resetBtn" class="action-btn">
-        <span>Reset Stats</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Request Log View -->
-  <div id="logView" class="log-view hidden">
-    <div class="log-header">
-      <button id="backBtn" class="back-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m15 18-6-6 6-6"/>
-        </svg>
-        Back
-      </button>
-      <h3>Request Log</h3>
-      <div class="log-count">Requests: <span id="logCount">0</span></div>
-    </div>
-    <div class="log-controls">
-      <button id="clearLog" class="log-btn">Clear</button>
-      <button id="pauseLog" class="log-btn">Pause</button>
-      <button id="exportLog" class="log-btn">Export</button>
-      <div class="log-filters">
-        <select id="filterType">
-          <option value="all">All requests</option>
-          <option value="blocked">Blocked only</option>
-          <option value="allowed">Allowed only</option>
-        </select>
-      </div>
-    </div>
-    <div class="log-container" id="logContainer">
-      <div class="log-empty">Loading requests...</div>
-    </div>
-  </div>
-
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>
