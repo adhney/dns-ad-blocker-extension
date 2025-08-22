@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "DNS Ad Blocker",
-  "version": "1.2",
-  "description": "Block ads at the DNS level with customizable blocklists",
+  "name": "Advanced YouTube & DNS Ad Blocker",
+  "version": "2.0",
+  "description": "Block YouTube video ads and all web ads with advanced techniques similar to uBlock Origin",
   "permissions": [
     "storage",
     "declarativeNetRequest",
@@ -38,5 +38,33 @@
         "path": "rules.json"
       }
     ]
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content-scripts/youtube-adblock.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-scripts/advanced-adblock.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "exclude_matches": [
+        "*://*.youtube.com/*",
+        "*://localhost/*",
+        "*://127.0.0.1/*",
+        "*://*.google.com/recaptcha/*",
+        "*://accounts.google.com/*",
+        "*://www.google.com/maps/*"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content-scripts/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

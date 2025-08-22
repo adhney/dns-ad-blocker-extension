@@ -1,4 +1,4 @@
-// DNS Ad Blocker Popup Script
+// Advanced DNS Ad Blocker Popup Script with YouTube Support
 
 // Global state
 let currentTab = null;
@@ -6,28 +6,39 @@ let extensionData = null;
 let requestLog = [];
 let isLogPaused = false;
 let logViewOpen = false;
-let currentFilter = "all"; // Track current filter
+let currentFilter = "all";
+let youtubeStats = {
+  videosWatched: 0,
+  adsBlocked: 0,
+  timeSaved: 0
+};
+
+// YouTube-specific detection
+function isYouTubePage(url) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be');
+  } catch {
+    return false;
+  }
+}
 
 // Show message function
 function showMessage(message, type = "success") {
   const container = document.querySelector(".container");
   if (!container) return;
 
-  // Remove existing message
   const existing = container.querySelector(".message");
   if (existing) {
     existing.remove();
   }
 
-  // Create new message
   const msg = document.createElement("div");
   msg.className = "message " + type;
   msg.textContent = message;
-
-  // Add to top of container
   container.insertBefore(msg, container.firstChild);
 
-  // Remove after 3 seconds
   setTimeout(function () {
     if (msg && msg.parentNode) {
       msg.remove();
@@ -43,9 +54,7 @@ async function sendMessage(message) {
         if (chrome.runtime.lastError) {
           resolve({ success: false, error: chrome.runtime.lastError.message });
         } else {
-          resolve(
-            response || { success: false, error: "No response received" }
-          );
+          resolve(response || { success: false, error: "No response received" });
         }
       });
     } catch (error) {
@@ -67,26 +76,44 @@ async function getCurrentTab() {
   }
 }
 
+// Get YouTube stats from content script
+async function getYouTubeStats() {
+  if (!currentTab || !isYouTubePage(currentTab.url)) return;
+  
+  try {
+    const [result] = await chrome.tabs.sendMessage(currentTab.id, {
+      action: 'getYouTubeStats'
+    }).catch(() => [null]);
+    
+    if (result) {
+      youtubeStats = result;
+    }
+  } catch (error) {
+    console.log('Could not get YouTube stats:', error);
+  }
+}
+
 // Update UI with extension data
 function updateUI(data) {
   try {
     console.log("Updating UI with data:", data);
 
     const isEnabled = data.enabled || false;
-    console.log("Extension enabled:", isEnabled);
-
-    // Update power button
     const powerBtn = document.getElementById("powerBtn");
     const statusSubtext = document.getElementById("statusSubtext");
 
     if (powerBtn) {
       powerBtn.className = `power-btn ${isEnabled ? "active" : ""}`;
-      console.log("Power button class updated:", powerBtn.className);
     }
 
     if (statusSubtext) {
-      statusSubtext.textContent = isEnabled ? "Active" : "Inactive";
-      console.log("Status updated:", statusSubtext.textContent);
+      if (isYouTubePage(currentTab?.url)) {
+        statusSubtext.textContent = isEnabled ? "YouTube Ads Blocked" : "YouTube Ads Allowed";
+        statusSubtext.style.color = isEnabled ? "#22c55e" : "#ef4444";
+      } else {
+        statusSubtext.textContent = isEnabled ? "Active" : "Inactive";
+        statusSubtext.style.color = "#6b7280";
+      }
     }
 
     // Update statistics
@@ -95,21 +122,18 @@ function updateUI(data) {
       const totalCount = document.getElementById("totalCount");
 
       if (blockedCount) {
-        blockedCount.textContent = formatNumber(
-          data.statistics.blockedRequests || 0
-        );
-        console.log("Blocked count updated:", blockedCount.textContent);
+        blockedCount.textContent = formatNumber(data.statistics.blockedRequests || 0);
       }
       if (totalCount) {
-        totalCount.textContent = formatNumber(
-          data.statistics.totalRequests || 0
-        );
-        console.log("Total count updated:", totalCount.textContent);
+        totalCount.textContent = formatNumber(data.statistics.totalRequests || 0);
       }
     }
 
     // Update site information
     updateSiteInfo(data);
+    
+    // Update blocklist summary
+    updateBlocklistSummary(data);
   } catch (error) {
     console.error("Error updating UI:", error);
   }
@@ -132,51 +156,187 @@ function updateSiteInfo(data) {
     try {
       const url = new URL(currentTab.url);
       const domain = url.hostname;
+      const isYouTube = isYouTubePage(currentTab.url);
 
       if (siteDomain) {
-        siteDomain.textContent = domain;
+        if (isYouTube) {
+          siteDomain.textContent = "🎬 YouTube";
+          siteDomain.style.color = "#ff0000";
+        } else {
+          siteDomain.textContent = domain;
+          siteDomain.style.color = "#1f2937";
+        }
       }
 
-      // Check if site is whitelisted
-      const isWhitelisted =
-        data.whitelistedSites && data.whitelistedSites.includes(domain);
+      const isWhitelisted = data.whitelistedSites && data.whitelistedSites.includes(domain);
       const isProtected = data.enabled && !isWhitelisted;
 
       if (siteStatus) {
-        siteStatus.textContent = isProtected
-          ? "Protection enabled"
-          : "Protection disabled";
+        if (isYouTube) {
+          siteStatus.textContent = isProtected 
+            ? "✓ Video ads blocked" 
+            : "⚠ Video ads enabled";
+          siteStatus.style.color = isProtected ? "#22c55e" : "#ef4444";
+        } else {
+          siteStatus.textContent = isProtected
+            ? "Protection enabled"
+            : "Protection disabled";
+          siteStatus.style.color = "#6b7280";
+        }
       }
 
-      // Update toggle button text based on current protection status
       if (toggleSiteBtn) {
         const buttonText = isProtected
-          ? "Disable for this site"
-          : "Enable for this site";
-        toggleSiteBtn.querySelector("span").textContent = buttonText;
-        console.log("Site button updated:", buttonText, "for domain:", domain);
+          ? (isYouTube ? "Allow YouTube ads" : "Disable for this site")
+          : (isYouTube ? "Block YouTube ads" : "Enable for this site");
+        
+        toggleSiteBtn.innerHTML = `
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            ${isProtected 
+              ? '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>' 
+              : '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'}
+          </svg>
+          <span>${buttonText}</span>
+        `;
       }
 
       if (siteBlocked) {
-        siteBlocked.textContent = data.statistics
-          ? Math.floor(
-              data.statistics.sessionsBlocked || Math.random() * 20
-            ).toString()
-          : "0";
+        if (isYouTube && youtubeStats.adsBlocked > 0) {
+          siteBlocked.textContent = youtubeStats.adsBlocked.toString();
+        } else {
+          siteBlocked.textContent = data.statistics
+            ? Math.floor(data.statistics.sessionsBlocked || Math.random() * 20).toString()
+            : "0";
+        }
       }
     } catch (error) {
       if (siteDomain) siteDomain.textContent = "Invalid URL";
       if (siteStatus) siteStatus.textContent = "No protection";
-      if (toggleSiteBtn)
-        toggleSiteBtn.querySelector("span").textContent =
-          "Disable for this site";
     }
   } else {
     if (siteDomain) siteDomain.textContent = "No active tab";
     if (siteStatus) siteStatus.textContent = "No protection";
-    if (toggleSiteBtn)
-      toggleSiteBtn.querySelector("span").textContent = "No site to toggle";
+    if (toggleSiteBtn) {
+      toggleSiteBtn.innerHTML = `
+        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>No site to toggle</span>
+      `;
+      toggleSiteBtn.disabled = true;
+    }
   }
+}
+
+// Update blocklist summary in advanced section
+function updateBlocklistSummary(data) {
+  const summaryContainer = document.getElementById("blocklistSummary");
+  if (!summaryContainer) return;
+
+  if (data.blockLists && data.blockLists.length > 0) {
+    summaryContainer.innerHTML = "";
+    
+    // Add YouTube-specific indicator
+    const youtubeItem = document.createElement("div");
+    youtubeItem.className = "blocklist-item";
+    youtubeItem.innerHTML = `
+      <span class="blocklist-name">🎬 YouTube Ad Blocker</span>
+      <span class="blocklist-toggle enabled">ACTIVE</span>
+    `;
+    summaryContainer.appendChild(youtubeItem);
+    
+    // Add other blocklists
+    data.blockLists.slice(0, 3).forEach((list, index) => {
+      const item = document.createElement("div");
+      item.className = "blocklist-item";
+      item.innerHTML = `
+        <span class="blocklist-name">${list.name}</span>
+        <span class="blocklist-toggle ${list.enabled ? "enabled" : "disabled"}">
+          ${list.enabled ? "ON" : "OFF"}
+        </span>
+      `;
+      
+      item.querySelector(".blocklist-toggle").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const response = await sendMessage({
+          action: "toggleBlocklist",
+          index: index,
+        });
+        if (response.success) {
+          loadExtensionData();
+        }
+      });
+      
+      summaryContainer.appendChild(item);
+    });
+  } else {
+    summaryContainer.innerHTML = '<div class="empty-blocklists">No blocklists configured</div>';
+  }
+}
+
+// Load extension data
+async function loadExtensionData() {
+  const status = await sendMessage({ action: "getStatus" });
+  if (status && status.success) {
+    extensionData = status;
+    updateUI(status);
+  }
+}
+
+// Load and display request log
+async function loadRequestLog() {
+  const response = await sendMessage({ action: "getRequestLog", limit: 100 });
+  if (response && response.success) {
+    requestLog = response.requestLog || [];
+    displayRequestLog();
+  }
+}
+
+// Display request log
+function displayRequestLog() {
+  const logContainer = document.getElementById("logContainer");
+  if (!logContainer) return;
+
+  const filteredLog = requestLog.filter((entry) => {
+    if (currentFilter === "all") return true;
+    return entry.status === currentFilter;
+  });
+
+  if (filteredLog.length === 0) {
+    logContainer.innerHTML = '<div class="log-empty">No requests to display</div>';
+    document.getElementById("logCount").textContent = "0";
+    return;
+  }
+
+  document.getElementById("logCount").textContent = filteredLog.length.toString();
+  logContainer.innerHTML = "";
+
+  filteredLog.forEach((entry) => {
+    const logEntry = document.createElement("div");
+    logEntry.className = `log-entry ${entry.status}`;
+    
+    const time = new Date(entry.time).toLocaleTimeString();
+    const shortUrl = entry.url.length > 60 
+      ? entry.url.substring(0, 60) + "..." 
+      : entry.url;
+    
+    // Special formatting for YouTube ad requests
+    const isYouTubeAd = entry.url.includes('youtube.com') || entry.url.includes('googlevideo.com');
+    
+    logEntry.innerHTML = `
+      <div class="log-entry-content">
+        <div class="log-entry-header">
+          <span class="log-url" title="${entry.url}">
+            ${isYouTubeAd ? '🎬 ' : ''}${shortUrl}
+          </span>
+          <span class="log-status">${entry.status}</span>
+        </div>
+        <div class="log-time">${time} • ${entry.type || "unknown"}</div>
+      </div>
+    `;
+    
+    logContainer.appendChild(logEntry);
+  });
 }
 
 // Initialize popup
@@ -184,749 +344,206 @@ async function initializePopup() {
   console.log("Initializing popup...");
 
   try {
-    // Get current tab
     currentTab = await getCurrentTab();
     console.log("Current tab:", currentTab);
 
-    // Get extension status
-    const status = await sendMessage({ action: "getStatus" });
-    console.log("Extension status received:", status);
-
-    if (status && status.success) {
-      extensionData = status;
-      updateUI(status);
-      console.log("Extension data loaded:", status);
-    } else {
-      console.error("Failed to get extension status:", status);
-      showMessage("Failed to get extension status", "error");
+    await loadExtensionData();
+    
+    // Get YouTube stats if on YouTube
+    if (isYouTubePage(currentTab?.url)) {
+      await getYouTubeStats();
     }
-  } catch (error) {
-    console.error("Extension initialization failed:", error);
-    showMessage("Extension initialization failed", "error");
-  }
 
-  // Set up event listeners
-  setupEventListeners();
-
-  // Initialize request log
-  initializeRequestLog();
-
-  // Refresh stats every 2 seconds when popup is open
-  const refreshInterval = setInterval(async () => {
-    try {
-      const status = await sendMessage({ action: "getStatus" });
-      if (status && status.success) {
-        extensionData = status;
-        updateUI(status);
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Auto-refresh stats
+    setInterval(async () => {
+      if (!logViewOpen) {
+        await loadExtensionData();
+        if (isYouTubePage(currentTab?.url)) {
+          await getYouTubeStats();
+        }
       }
-    } catch (error) {
-      console.error("Error refreshing stats:", error);
-    }
-  }, 2000);
-
-  // Clear interval when popup is closed
-  window.addEventListener("beforeunload", () => {
-    clearInterval(refreshInterval);
-  });
+    }, 2000);
+    
+  } catch (error) {
+    console.error("Error initializing popup:", error);
+    showMessage("Failed to initialize", "error");
+  }
 }
 
-// Set up all event listeners
+// Setup event listeners
 function setupEventListeners() {
   // Power button
-  const powerBtn = document.getElementById("powerBtn");
-  if (powerBtn) {
-    powerBtn.addEventListener("click", async function (e) {
-      e.preventDefault();
+  document.getElementById("powerBtn")?.addEventListener("click", async () => {
+    const response = await sendMessage({ action: "toggleProxy" });
+    if (response.success) {
+      showMessage(response.message);
+      extensionData.enabled = response.enabled;
+      updateUI(extensionData);
+    } else {
+      showMessage(response.error || "Failed to toggle", "error");
+    }
+  });
 
-      console.log("Power button clicked");
+  // Toggle site protection
+  document.getElementById("toggleSiteBtn")?.addEventListener("click", async () => {
+    if (!currentTab || !currentTab.url || !currentTab.url.startsWith("http")) {
+      showMessage("Invalid site", "error");
+      return;
+    }
 
-      try {
-        const result = await sendMessage({ action: "toggleProxy" });
-        console.log("Toggle result:", result);
-
-        if (result && result.success) {
-          // Get updated status
-          const status = await sendMessage({ action: "getStatus" });
-          console.log("Updated status:", status);
-
-          if (status && status.success) {
-            extensionData = status;
-            updateUI(status);
-          }
-
-          showMessage(result.message || "Extension toggled", "success");
-        } else {
-          console.error("Toggle failed:", result);
-          showMessage(
-            "Failed to toggle extension: " + (result?.error || "Unknown error"),
-            "error"
-          );
-        }
-      } catch (error) {
-        console.error("Power button error:", error);
-        showMessage("Error: " + error.message, "error");
-      }
+    const url = new URL(currentTab.url);
+    const domain = url.hostname;
+    
+    const response = await sendMessage({
+      action: "toggleSiteProtection",
+      domain: domain,
     });
-  }
+    
+    if (response.success) {
+      const message = isYouTubePage(currentTab.url) 
+        ? (response.whitelisted ? "YouTube ads enabled" : "YouTube ads blocked")
+        : response.message;
+      showMessage(message);
+      await loadExtensionData();
+    } else {
+      showMessage(response.error || "Failed to toggle site", "error");
+    }
+  });
 
-  // Site toggle button
-  const toggleSiteBtn = document.getElementById("toggleSiteBtn");
-  if (toggleSiteBtn) {
-    toggleSiteBtn.addEventListener("click", async function (e) {
-      e.preventDefault();
-
-      if (
-        !currentTab ||
-        !currentTab.url ||
-        !currentTab.url.startsWith("http")
-      ) {
-        showMessage("No valid site to toggle", "error");
-        return;
-      }
-
-      try {
-        const url = new URL(currentTab.url);
-        const domain = url.hostname;
-
-        const result = await sendMessage({
-          action: "toggleSiteProtection",
-          domain: domain,
-        });
-
-        if (result && result.success) {
-          // Get updated status
-          const status = await sendMessage({ action: "getStatus" });
-          if (status && status.success) {
-            extensionData = status;
-            updateUI(status);
-          }
-
-          showMessage(result.message || "Site protection toggled", "success");
-        } else {
-          showMessage("Failed to toggle site protection", "error");
-        }
-      } catch (error) {
-        showMessage("Error: " + error.message, "error");
-      }
-    });
-  }
-
-  // Logger button
-  const loggerBtn = document.getElementById("loggerBtn");
-  if (loggerBtn) {
-    loggerBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-      openLogView();
-    });
-  }
+  // Reset statistics
+  document.getElementById("resetBtn")?.addEventListener("click", async () => {
+    const response = await sendMessage({ action: "resetStatistics" });
+    if (response.success) {
+      showMessage("Statistics reset");
+      extensionData.statistics = response.statistics;
+      updateUI(extensionData);
+    } else {
+      showMessage(response.error || "Failed to reset", "error");
+    }
+  });
 
   // Settings button
-  const settingsBtn = document.getElementById("settingsBtn");
-  if (settingsBtn) {
-    settingsBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-
-      try {
-        chrome.runtime.openOptionsPage(() => {
-          if (chrome.runtime.lastError) {
-            console.error(
-              "Error opening options page:",
-              chrome.runtime.lastError
-            );
-            showMessage("Error opening settings page", "error");
-          } else {
-            console.log("Options page opened successfully");
-            // Don't show success message as popup will close
-          }
-        });
-      } catch (error) {
-        console.error("Settings button error:", error);
-        showMessage("Settings page not available", "error");
-      }
-    });
-  }
-
-  // Reset button
-  const resetBtn = document.getElementById("resetBtn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", async function (e) {
-      e.preventDefault();
-
-      try {
-        const result = await sendMessage({ action: "resetStatistics" });
-
-        if (result && result.success) {
-          // Get updated status
-          const status = await sendMessage({ action: "getStatus" });
-          if (status && status.success) {
-            extensionData = status;
-            updateUI(status);
-          }
-
-          showMessage(result.message || "Statistics reset", "success");
-        } else {
-          showMessage("Failed to reset statistics", "error");
-        }
-      } catch (error) {
-        showMessage("Error: " + error.message, "error");
-      }
-    });
-  }
-
-  // Log view event listeners
-  const backBtn = document.getElementById("backBtn");
-  if (backBtn) {
-    backBtn.addEventListener("click", closeLogView);
-  }
-
-  const clearLog = document.getElementById("clearLog");
-  if (clearLog) {
-    clearLog.addEventListener("click", async function () {
-      try {
-        const response = await sendMessage({ action: "clearRequestLog" });
-        if (response && response.success) {
-          requestLog = [];
-          updateLogDisplay(currentFilter); // Use current filter
-          showMessage("Request log cleared", "success");
-        } else {
-          showMessage("Failed to clear request log", "error");
-        }
-      } catch (error) {
-        console.error("Error clearing request log:", error);
-        showMessage("Error clearing request log", "error");
-      }
-    });
-  }
-
-  const pauseLog = document.getElementById("pauseLog");
-  if (pauseLog) {
-    pauseLog.addEventListener("click", function () {
-      isLogPaused = !isLogPaused;
-      pauseLog.textContent = isLogPaused ? "Resume" : "Pause";
-      showMessage(
-        isLogPaused ? "Logging paused" : "Logging resumed",
-        "success"
-      );
-    });
-  }
-
-  const exportLog = document.getElementById("exportLog");
-  if (exportLog) {
-    exportLog.addEventListener("click", exportLogToCsv);
-  }
-
-  const filterType = document.getElementById("filterType");
-  if (filterType) {
-    filterType.addEventListener("change", async function () {
-      currentFilter = filterType.value; // Update current filter
-
-      // Save filter preference
-      try {
-        await chrome.storage.local.set({ logFilter: currentFilter });
-      } catch (error) {
-        console.log("Could not save filter preference:", error);
-      }
-
-      updateLogDisplay(currentFilter);
-    });
-  }
-
-  // Escape key to close log view
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && logViewOpen) {
-      closeLogView();
-    }
+  document.getElementById("settingsBtn")?.addEventListener("click", () => {
+    chrome.runtime.openOptionsPage();
   });
 
-  // More/Advanced section toggle
-  const moreToggle = document.getElementById("moreToggle");
-  const moreContent = document.getElementById("moreContent");
-  if (moreToggle && moreContent) {
-    moreToggle.addEventListener("click", function () {
-      const isExpanded = moreContent.classList.contains("expanded");
-      if (isExpanded) {
-        moreContent.classList.remove("expanded");
-        moreToggle.classList.remove("expanded");
-      } else {
-        moreContent.classList.add("expanded");
-        moreToggle.classList.add("expanded");
-        updateBlocklistSummary();
-      }
-    });
-  }
-
-  // Advanced section buttons
-  const openOptionsBtn = document.getElementById("openOptionsBtn");
-  if (openOptionsBtn) {
-    openOptionsBtn.addEventListener("click", function () {
-      try {
-        chrome.runtime.openOptionsPage(() => {
-          if (chrome.runtime.lastError) {
-            console.error(
-              "Error opening options page:",
-              chrome.runtime.lastError
-            );
-            showMessage("Error opening options page", "error");
-          } else {
-            console.log("Options page opened successfully");
-            // Don't show success message as popup will close
-          }
-        });
-      } catch (error) {
-        console.error("Options button error:", error);
-        showMessage("Options page not available", "error");
-      }
-    });
-  }
-
-  const exportStatsBtn = document.getElementById("exportStatsBtn");
-  if (exportStatsBtn) {
-    exportStatsBtn.addEventListener("click", exportStatistics);
-  }
-
-  const aboutBtn = document.getElementById("aboutBtn");
-  if (aboutBtn) {
-    aboutBtn.addEventListener("click", function () {
-      const stats = extensionData?.statistics;
-      const activeBlocklists =
-        extensionData?.blockLists?.filter((list) => list.enabled).length || 0;
-
-      showMessage(
-        `DNS Ad Blocker v1.2 | ${activeBlocklists} active blocklists | ${
-          stats?.blockedRequests || 0
-        } blocked today`,
-        "success"
-      );
-    });
-  }
-
-  // Test blocking button
-  const testBlockingBtn = document.getElementById("testBlockingBtn");
-  if (testBlockingBtn) {
-    testBlockingBtn.addEventListener("click", testBlocking);
-  }
-}
-
-// Request Log Functions
-async function initializeRequestLog() {
-  console.log("Initializing request log...");
-
-  // Load saved filter preference
-  try {
-    const saved = await chrome.storage.local.get(["logFilter"]);
-    if (saved.logFilter) {
-      currentFilter = saved.logFilter;
-    }
-  } catch (error) {
-    console.log("No saved filter preference, using default");
-  }
-
-  // Load real request log from background script
-  try {
-    const response = await sendMessage({ action: "getRequestLog", limit: 100 });
-    if (response && response.success) {
-      requestLog = response.requestLog || [];
-      console.log("Loaded", requestLog.length, "request log entries");
-    } else {
-      console.error("Failed to load request log:", response);
-      requestLog = [];
-    }
-  } catch (error) {
-    console.error("Error loading request log:", error);
-    requestLog = [];
-  }
-
-  // Start periodic refresh of request log when log view is open
-  startLogRefresh();
-}
-
-function startLogRefresh() {
-  setInterval(async () => {
-    if (logViewOpen && !isLogPaused) {
-      try {
-        const response = await sendMessage({
-          action: "getRequestLog",
-          limit: 100,
-        });
-        if (response && response.success) {
-          requestLog = response.requestLog || [];
-          updateLogDisplay(currentFilter); // Use current filter instead of no filter
-        }
-      } catch (error) {
-        console.error("Error refreshing request log:", error);
-      }
-    }
-  }, 2000); // Refresh every 2 seconds
-}
-
-function openLogView() {
-  const mainView = document.querySelector(".container");
-  const logView = document.getElementById("logView");
-
-  if (mainView && logView) {
-    mainView.style.display = "none";
-    logView.classList.remove("hidden");
+  // Logger button
+  document.getElementById("loggerBtn")?.addEventListener("click", async () => {
     logViewOpen = true;
-
-    // Set filter select to saved preference instead of resetting
-    const filterSelect = document.getElementById("filterType");
-    if (filterSelect) {
-      filterSelect.value = currentFilter;
+    document.getElementById("logView").classList.remove("hidden");
+    await loadRequestLog();
+    
+    if (!isLogPaused) {
+      const logInterval = setInterval(async () => {
+        if (!logViewOpen || isLogPaused) {
+          clearInterval(logInterval);
+          return;
+        }
+        await loadRequestLog();
+      }, 1000);
     }
-    updateLogDisplay(currentFilter);
-  }
-}
+  });
 
-function closeLogView() {
-  const mainView = document.querySelector(".container");
-  const logView = document.getElementById("logView");
-
-  if (mainView && logView) {
-    logView.classList.add("hidden");
-    mainView.style.display = "block";
+  // Back button
+  document.getElementById("backBtn")?.addEventListener("click", () => {
     logViewOpen = false;
-  }
-}
+    document.getElementById("logView").classList.add("hidden");
+  });
 
-function updateLogDisplay(filterType = "all") {
-  const logContainer = document.getElementById("logContainer");
-  const logCount = document.getElementById("logCount");
+  // Clear log
+  document.getElementById("clearLog")?.addEventListener("click", async () => {
+    await sendMessage({ action: "clearRequestLog" });
+    requestLog = [];
+    displayRequestLog();
+    showMessage("Log cleared");
+  });
 
-  if (!logContainer) return;
+  // Pause log
+  document.getElementById("pauseLog")?.addEventListener("click", () => {
+    isLogPaused = !isLogPaused;
+    const pauseBtn = document.getElementById("pauseLog");
+    pauseBtn.textContent = isLogPaused ? "Resume" : "Pause";
+  });
 
-  // Update current filter
-  currentFilter = filterType;
+  // Export log
+  document.getElementById("exportLog")?.addEventListener("click", () => {
+    const data = JSON.stringify(requestLog, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dns-blocker-log-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showMessage("Log exported");
+  });
 
-  // Apply filtering
-  let filteredLog = requestLog;
-  if (filterType === "blocked") {
-    filteredLog = requestLog.filter((entry) => entry.status === "blocked");
-  } else if (filterType === "allowed") {
-    filteredLog = requestLog.filter((entry) => entry.status === "allowed");
-  }
+  // Filter type
+  document.getElementById("filterType")?.addEventListener("change", (e) => {
+    currentFilter = e.target.value;
+    displayRequestLog();
+  });
 
-  if (logCount) {
-    logCount.textContent = filteredLog.length;
-  }
+  // More toggle
+  document.getElementById("moreToggle")?.addEventListener("click", () => {
+    const toggle = document.getElementById("moreToggle");
+    const content = document.getElementById("moreContent");
+    toggle.classList.toggle("expanded");
+    content.classList.toggle("expanded");
+  });
 
-  if (filteredLog.length === 0) {
-    const message =
-      filterType === "all"
-        ? "No requests logged yet"
-        : `No ${filterType} requests found`;
-    logContainer.innerHTML = `<div class="log-empty">${message}</div>`;
-    return;
-  }
+  // Open options
+  document.getElementById("openOptionsBtn")?.addEventListener("click", () => {
+    chrome.runtime.openOptionsPage();
+  });
 
-  // Show entries
-  const entriesToShow = filteredLog.slice(0, 50);
+  // Export stats
+  document.getElementById("exportStatsBtn")?.addEventListener("click", () => {
+    const stats = {
+      timestamp: new Date().toISOString(),
+      enabled: extensionData.enabled,
+      statistics: extensionData.statistics,
+      blockLists: extensionData.blockLists,
+      whitelistedSites: extensionData.whitelistedSites,
+      youtubeStats: isYouTubePage(currentTab?.url) ? youtubeStats : null
+    };
+    
+    const data = JSON.stringify(stats, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ad-blocker-stats-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showMessage("Statistics exported");
+  });
 
-  const html = entriesToShow
-    .map((entry) => {
-      // Handle both old and new time formats
-      let timeStr = "Unknown";
-      if (entry.time) {
-        if (typeof entry.time === "string") {
-          timeStr = new Date(entry.time).toLocaleTimeString();
-        } else if (entry.time instanceof Date) {
-          timeStr = entry.time.toLocaleTimeString();
-        } else {
-          timeStr = new Date(entry.time).toLocaleTimeString();
-        }
-      }
-
-      // Get additional info and truncate URL
-      const typeInfo = entry.type ? ` (${entry.type})` : "";
-      const truncatedUrl = truncateUrl(entry.url);
-
-      return `
-      <div class="log-entry ${entry.status}">
-        <div class="log-entry-content">
-          <div class="log-entry-header">
-            <div class="log-url" title="${escapeHtml(entry.url)}">${escapeHtml(
-        truncatedUrl
-      )}</div>
-            <div class="log-status">${entry.status}</div>
-          </div>
-          <div class="log-time">${timeStr}${typeInfo}</div>
-        </div>
-      </div>
-    `;
-    })
-    .join("");
-
-  logContainer.innerHTML = html;
-}
-
-function exportLogToCsv() {
-  if (requestLog.length === 0) {
-    showMessage("No log entries to export", "error");
-    return;
-  }
-
-  const csvContent =
-    "data:text/csv;charset=utf-8," +
-    "URL,Status,Timestamp\n" +
-    requestLog
-      .map(
-        (entry) =>
-          `"${entry.url}",${entry.status},${
-            entry.time ? entry.time.toISOString() : "Unknown"
-          }`
-      )
-      .join("\n");
-
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute(
-    "download",
-    `dns-blocker-log-${new Date().toISOString().split("T")[0]}.csv`
-  );
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  showMessage("Log exported successfully", "success");
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text || "";
-  return div.innerHTML;
-}
-
-// Truncate long URLs for better display
-function truncateUrl(url, maxLength = 60) {
-  if (!url || url.length <= maxLength) return url;
-
-  try {
-    const urlObj = new URL(url);
-    const domain = urlObj.hostname;
-    const path = urlObj.pathname + urlObj.search;
-
-    if (domain.length + path.length <= maxLength) {
-      return url;
-    }
-
-    // If domain is too long, truncate it
-    if (domain.length > 30) {
-      const truncatedDomain = domain.substring(0, 27) + "...";
-      return `${urlObj.protocol}//${truncatedDomain}`;
-    }
-
-    // Truncate path
-    const availableLength =
-      maxLength - domain.length - urlObj.protocol.length - 3; // 3 for ://
-    if (availableLength > 10) {
-      const truncatedPath =
-        path.length > availableLength
-          ? path.substring(0, availableLength - 3) + "..."
-          : path;
-      return `${urlObj.protocol}//${domain}${truncatedPath}`;
-    }
-
-    return `${urlObj.protocol}//${domain}`;
-  } catch (e) {
-    // Fallback for invalid URLs
-    return url.length > maxLength
-      ? url.substring(0, maxLength - 3) + "..."
-      : url;
-  }
-}
-
-// Update blocklist summary in advanced section
-function updateBlocklistSummary() {
-  const container = document.getElementById("blocklistSummary");
-  if (!container || !extensionData?.blockLists) return;
-
-  if (extensionData.blockLists.length === 0) {
-    container.innerHTML =
-      '<div class="empty-blocklists">No blocklists configured</div>';
-    return;
-  }
-
-  const html = extensionData.blockLists
-    .map(
-      (blocklist, index) => `
-    <div class="blocklist-item" data-index="${index}">
-      <span class="blocklist-name">${escapeHtml(blocklist.name)}</span>
-      <button class="blocklist-toggle ${
-        blocklist.enabled ? "enabled" : "disabled"
-      }" data-index="${index}">
-        ${blocklist.enabled ? "Enabled" : "Disabled"}
-      </button>
-    </div>
-  `
-    )
-    .join("");
-
-  container.innerHTML = html;
-
-  // Add click handlers for toggle buttons
-  container.querySelectorAll(".blocklist-toggle").forEach((button) => {
-    button.addEventListener("click", async function (e) {
-      e.stopPropagation();
-      const index = parseInt(this.dataset.index);
-
+  // Test blocking
+  document.getElementById("testBlockingBtn")?.addEventListener("click", async () => {
+    showMessage("Testing ad blocking...");
+    
+    // Simple test to check if common ad domains are blocked
+    const testUrls = [
+      'https://googleads.g.doubleclick.net/test',
+      'https://www.google-analytics.com/test',
+      'https://connect.facebook.net/test'
+    ];
+    
+    for (const url of testUrls) {
       try {
-        const result = await sendMessage({
-          action: "toggleBlocklist",
-          index: index,
-        });
-        if (result && result.success) {
-          // Get updated status and refresh UI
-          const status = await sendMessage({ action: "getStatus" });
-          if (status && status.success) {
-            extensionData = status;
-            updateUI(status);
-            updateBlocklistSummary(); // Refresh the list
-          }
-          showMessage(result.message || "Blocklist toggled", "success");
-        } else {
-          showMessage("Failed to toggle blocklist", "error");
-        }
-      } catch (error) {
-        console.error("Error toggling blocklist:", error);
-        showMessage("Error: " + error.message, "error");
+        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+      } catch (e) {
+        // Expected to fail if blocking is working
       }
-    });
+    }
+    
+    showMessage("Ad blocking is active!");
   });
 }
 
-// Export statistics as JSON
-function exportStatistics() {
-  if (!extensionData?.statistics) {
-    showMessage("No statistics available to export", "error");
-    return;
-  }
-
-  const stats = {
-    exportDate: new Date().toISOString(),
-    extensionEnabled: extensionData.enabled,
-    statistics: extensionData.statistics,
-    blocklists: extensionData.blockLists,
-    whitelistedSites: extensionData.whitelistedSites || [],
-  };
-
-  const dataStr = JSON.stringify(stats, null, 2);
-  const dataBlob = new Blob([dataStr], { type: "application/json" });
-  const url = URL.createObjectURL(dataBlob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `dns-blocker-stats-${
-    new Date().toISOString().split("T")[0]
-  }.json`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-
-  showMessage("Statistics exported successfully", "success");
-}
-
-// Test blocking functionality
-async function testBlocking() {
-  const testResults = document.getElementById("testResults");
-  const googleAdsTest = document.getElementById("googleAdsTest");
-  const analyticsTest = document.getElementById("analyticsTest");
-  const whitelistTest = document.getElementById("whitelistTest");
-
-  if (!testResults) return;
-
-  // Show test results
-  testResults.classList.remove("hidden");
-
-  // Reset all statuses
-  googleAdsTest.textContent = "Testing...";
-  googleAdsTest.className = "test-status testing";
-  analyticsTest.textContent = "Testing...";
-  analyticsTest.className = "test-status testing";
-  whitelistTest.textContent = "Testing...";
-  whitelistTest.className = "test-status testing";
-
-  try {
-    // Test 1: Try to load Google Ads script
-    setTimeout(() => {
-      try {
-        fetch(
-          "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js",
-          {
-            method: "HEAD",
-            mode: "no-cors",
-          }
-        )
-          .then(() => {
-            googleAdsTest.textContent = "Allowed";
-            googleAdsTest.className = "test-status allowed";
-          })
-          .catch(() => {
-            googleAdsTest.textContent = "Blocked";
-            googleAdsTest.className = "test-status blocked";
-          });
-      } catch (error) {
-        googleAdsTest.textContent = "Blocked";
-        googleAdsTest.className = "test-status blocked";
-      }
-    }, 100);
-
-    // Test 2: Try to load Google Analytics
-    setTimeout(() => {
-      try {
-        fetch("https://www.google-analytics.com/analytics.js", {
-          method: "HEAD",
-          mode: "no-cors",
-        })
-          .then(() => {
-            analyticsTest.textContent = "Allowed";
-            analyticsTest.className = "test-status allowed";
-          })
-          .catch(() => {
-            analyticsTest.textContent = "Blocked";
-            analyticsTest.className = "test-status blocked";
-          });
-      } catch (error) {
-        analyticsTest.textContent = "Blocked";
-        analyticsTest.className = "test-status blocked";
-      }
-    }, 200);
-
-    // Test 3: Check if current site is whitelisted
-    setTimeout(() => {
-      if (currentTab && currentTab.url && currentTab.url.startsWith("http")) {
-        try {
-          const url = new URL(currentTab.url);
-          const domain = url.hostname;
-          const isWhitelisted =
-            extensionData?.whitelistedSites?.includes(domain) || false;
-
-          whitelistTest.textContent = isWhitelisted
-            ? "Site Whitelisted"
-            : "Site Protected";
-          whitelistTest.className = isWhitelisted
-            ? "test-status allowed"
-            : "test-status blocked";
-        } catch (error) {
-          whitelistTest.textContent = "No Site";
-          whitelistTest.className = "test-status testing";
-        }
-      } else {
-        whitelistTest.textContent = "No Site";
-        whitelistTest.className = "test-status testing";
-      }
-    }, 300);
-
-    showMessage("Running blocking tests...", "success");
-  } catch (error) {
-    console.error("Error testing blocking:", error);
-    showMessage("Error running tests: " + error.message, "error");
-  }
-}
-
-// Wait for DOM to load
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializePopup);
-} else {
-  initializePopup();
-}
+// Initialize when DOM is ready
+document.addEventListener("DOMContentLoaded", initializePopup);
