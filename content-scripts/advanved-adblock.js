@@ -1,10 +1,10 @@
 // General Advanced Ad Blocker Content Script
 // Implements advanced ad blocking techniques for all websites
 
-(function() {
-  'use strict';
+(function () {
+  "use strict";
 
-  console.log('[Advanced AdBlock] Initializing content script...');
+  console.log("[Advanced AdBlock] Initializing content script...");
 
   // Configuration
   const CONFIG = {
@@ -13,12 +13,12 @@
     blockPopups: true,
     blockWebSockets: true,
     cosmenticFiltering: true,
-    debugMode: false
+    debugMode: false,
   };
 
   const debug = (...args) => {
     if (CONFIG.debugMode) {
-      console.log('[Advanced AdBlock]', ...args);
+      console.log("[Advanced AdBlock]", ...args);
     }
   };
 
@@ -39,76 +39,76 @@
     '[class*="banner"]:not([class*="banner-content"])',
     '[class*="sponsor"]',
     '[class*="promo"]:not([class*="promotion-al"])',
-    
+
     // Specific ad types
-    '.google-ads',
-    '.googleads',
-    '.ad-container',
-    '.ad-wrapper',
-    '.ad-unit',
-    '.advertisement',
-    '.ads-container',
-    '.adsense',
-    '.adsbygoogle',
-    '.dfp-ad',
-    '.display-ad',
-    '.text-ad',
-    '.native-ad',
-    '.promoted-content',
-    '.sponsored-content',
-    '.paid-content',
-    
+    ".google-ads",
+    ".googleads",
+    ".ad-container",
+    ".ad-wrapper",
+    ".ad-unit",
+    ".advertisement",
+    ".ads-container",
+    ".adsense",
+    ".adsbygoogle",
+    ".dfp-ad",
+    ".display-ad",
+    ".text-ad",
+    ".native-ad",
+    ".promoted-content",
+    ".sponsored-content",
+    ".paid-content",
+
     // Popup and overlay ads
     '[class*="popup"]:not([class*="popup-content"])',
     '[class*="overlay"]:not([class*="overlay-content"])',
     '[class*="modal"][class*="ad"]',
-    '.interstitial',
-    '.lightbox-ad',
-    
+    ".interstitial",
+    ".lightbox-ad",
+
     // Sidebar and widget ads
-    '.sidebar-ad',
-    '.widget-ad',
-    '.side-banner',
-    
+    ".sidebar-ad",
+    ".widget-ad",
+    ".side-banner",
+
     // Video ads
-    '.video-ad',
-    '.preroll-ad',
-    '.midroll-ad',
-    '.postroll-ad',
-    
+    ".video-ad",
+    ".preroll-ad",
+    ".midroll-ad",
+    ".postroll-ad",
+
     // Social media ads
     '[data-testid*="promo"]',
     '[data-testid*="sponsor"]',
     '[aria-label*="Sponsored"]',
     '[aria-label*="Advertisement"]',
-    
+
     // Newsletter and subscription popups
-    '.newsletter-popup',
-    '.subscribe-popup',
-    '.email-capture',
-    
+    ".newsletter-popup",
+    ".subscribe-popup",
+    ".email-capture",
+
     // Cookie banners (optional)
-    '.cookie-banner',
-    '.cookie-consent',
-    '.gdpr-banner'
+    ".cookie-banner",
+    ".cookie-consent",
+    ".gdpr-banner",
   ];
 
   // Hide elements with advanced techniques
   function hideAdElements() {
     // Method 1: Direct removal
-    universalAdSelectors.forEach(selector => {
+    universalAdSelectors.forEach((selector) => {
       try {
         const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
+        elements.forEach((el) => {
           // Check if element is actually visible and likely an ad
           if (isLikelyAd(el)) {
-            el.style.display = 'none !important';
-            el.style.visibility = 'hidden !important';
-            el.style.opacity = '0 !important';
-            el.style.height = '0 !important';
-            el.style.width = '0 !important';
-            el.style.overflow = 'hidden !important';
-            el.setAttribute('data-blocked-ad', 'true');
+            el.style.display = "none !important";
+            el.style.visibility = "hidden !important";
+            el.style.opacity = "0 !important";
+            el.style.height = "0 !important";
+            el.style.width = "0 !important";
+            el.style.overflow = "hidden !important";
+            el.setAttribute("data-blocked-ad", "true");
             debug(`Hidden element: ${selector}`);
           }
         });
@@ -124,27 +124,27 @@
   // Check if element is likely an ad
   function isLikelyAd(element) {
     if (!element) return false;
-    
+
     // Skip if element is too small (likely not an ad)
     const rect = element.getBoundingClientRect();
     if (rect.width < 50 && rect.height < 50) return false;
-    
+
     // Check for ad-related attributes
-    const attributes = ['id', 'class', 'data-ad', 'data-sponsor', 'data-promo'];
+    const attributes = ["id", "class", "data-ad", "data-sponsor", "data-promo"];
     for (let attr of attributes) {
       const value = element.getAttribute(attr);
       if (value && /ad|sponsor|promo|banner/i.test(value)) {
         return true;
       }
     }
-    
+
     // Check for ad-related content
     const text = element.textContent.toLowerCase();
-    const adKeywords = ['advertisement', 'sponsored', 'promoted', 'ads by'];
-    if (adKeywords.some(keyword => text.includes(keyword))) {
+    const adKeywords = ["advertisement", "sponsored", "promoted", "ads by"];
+    if (adKeywords.some((keyword) => text.includes(keyword))) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -153,37 +153,43 @@
   function blockScriptInjection() {
     // Override createElement to block ad scripts
     const originalCreateElement = document.createElement;
-    document.createElement = function(tagName) {
+    document.createElement = function (tagName) {
       const element = originalCreateElement.call(document, tagName);
-      
-      if (tagName.toLowerCase() === 'script') {
+
+      if (tagName.toLowerCase() === "script") {
         // Override src setter to block ad scripts
-        const originalSrcSetter = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src').set;
-        Object.defineProperty(element, 'src', {
-          set: function(value) {
+        const originalSrcSetter = Object.getOwnPropertyDescriptor(
+          HTMLScriptElement.prototype,
+          "src"
+        ).set;
+        Object.defineProperty(element, "src", {
+          set: function (value) {
             if (isAdScript(value)) {
               debug(`Blocked script: ${value}`);
               return;
             }
             originalSrcSetter.call(this, value);
-          }
+          },
         });
       }
-      
-      if (tagName.toLowerCase() === 'iframe') {
+
+      if (tagName.toLowerCase() === "iframe") {
         // Override src setter to block ad iframes
-        const originalSrcSetter = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src').set;
-        Object.defineProperty(element, 'src', {
-          set: function(value) {
+        const originalSrcSetter = Object.getOwnPropertyDescriptor(
+          HTMLIFrameElement.prototype,
+          "src"
+        ).set;
+        Object.defineProperty(element, "src", {
+          set: function (value) {
             if (isAdUrl(value)) {
               debug(`Blocked iframe: ${value}`);
               return;
             }
             originalSrcSetter.call(this, value);
-          }
+          },
         });
       }
-      
+
       return element;
     };
   }
@@ -191,53 +197,55 @@
   // Check if URL is an ad script
   function isAdScript(url) {
     if (!url) return false;
-    
+
     const adDomains = [
-      'doubleclick.net',
-      'googlesyndication.com',
-      'googleadservices.com',
-      'googletagmanager.com',
-      'google-analytics.com',
-      'facebook.com/tr',
-      'amazon-adsystem.com',
-      'adsystem.com',
-      'adsrvr.org',
-      'adnxs.com',
-      'taboola.com',
-      'outbrain.com',
-      'criteo.com',
-      'pubmatic.com',
-      'smartadserver.com',
-      'rubiconproject.com',
-      'openx.net',
-      'appnexus.com',
-      'contextweb.com',
-      'districtm.io',
-      'sovrn.com',
-      'indexexchange.com',
-      'media.net',
-      'revcontent.com',
-      'yandex.ru/metrika',
-      'mc.yandex.ru',
-      'scorecardresearch.com',
-      'quantserve.com',
-      'hotjar.com',
-      'mouseflow.com',
-      'clarity.ms',
-      'fullstory.com'
+      "doubleclick.net",
+      "googlesyndication.com",
+      "googleadservices.com",
+      "googletagmanager.com",
+      "google-analytics.com",
+      "facebook.com/tr",
+      "amazon-adsystem.com",
+      "adsystem.com",
+      "adsrvr.org",
+      "adnxs.com",
+      "taboola.com",
+      "outbrain.com",
+      "criteo.com",
+      "pubmatic.com",
+      "smartadserver.com",
+      "rubiconproject.com",
+      "openx.net",
+      "appnexus.com",
+      "contextweb.com",
+      "districtm.io",
+      "sovrn.com",
+      "indexexchange.com",
+      "media.net",
+      "revcontent.com",
+      "yandex.ru/metrika",
+      "mc.yandex.ru",
+      "scorecardresearch.com",
+      "quantserve.com",
+      "hotjar.com",
+      "mouseflow.com",
+      "clarity.ms",
+      "fullstory.com",
     ];
-    
-    return adDomains.some(domain => url.includes(domain));
+
+    return adDomains.some((domain) => url.includes(domain));
   }
 
   // Check if URL is likely an ad
   function isAdUrl(url) {
     if (!url) return false;
-    return isAdScript(url) || 
-           url.includes('/ads/') || 
-           url.includes('/ad/') ||
-           url.includes('banner') ||
-           url.includes('popup');
+    return (
+      isAdScript(url) ||
+      url.includes("/ads/") ||
+      url.includes("/ad/") ||
+      url.includes("banner") ||
+      url.includes("popup")
+    );
   }
 
   // ============= Network Request Interception =============
@@ -245,23 +253,25 @@
   function interceptNetworkRequests() {
     // Override fetch
     const originalFetch = window.fetch;
-    window.fetch = function(...args) {
+    window.fetch = function (...args) {
       const url = args[0];
-      
-      if (typeof url === 'string' && isAdUrl(url)) {
+
+      if (typeof url === "string" && isAdUrl(url)) {
         debug(`Blocked fetch request: ${url}`);
-        return Promise.resolve(new Response('', {
-          status: 204,
-          statusText: 'No Content'
-        }));
+        return Promise.resolve(
+          new Response("", {
+            status: 204,
+            statusText: "No Content",
+          })
+        );
       }
-      
+
       return originalFetch.apply(this, args);
     };
 
     // Override XMLHttpRequest
     const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
+    XMLHttpRequest.prototype.open = function (method, url) {
       if (isAdUrl(url)) {
         debug(`Blocked XHR request: ${url}`);
         this.abort();
@@ -273,10 +283,10 @@
     // Block WebSocket connections to ad servers
     if (CONFIG.blockWebSockets) {
       const originalWebSocket = window.WebSocket;
-      window.WebSocket = function(url) {
+      window.WebSocket = function (url) {
         if (isAdUrl(url)) {
           debug(`Blocked WebSocket: ${url}`);
-          throw new Error('WebSocket blocked');
+          throw new Error("WebSocket blocked");
         }
         return new originalWebSocket(url);
       };
@@ -288,7 +298,7 @@
   function blockPopupsAndRedirects() {
     // Override window.open
     const originalOpen = window.open;
-    window.open = function() {
+    window.open = function () {
       const url = arguments[0];
       if (!url || isAdUrl(url)) {
         debug(`Blocked popup: ${url}`);
@@ -299,15 +309,19 @@
 
     // Block pop-unders
     let lastUserInteraction = 0;
-    ['mousedown', 'keydown', 'touchstart'].forEach(event => {
-      document.addEventListener(event, () => {
-        lastUserInteraction = Date.now();
-      }, true);
+    ["mousedown", "keydown", "touchstart"].forEach((event) => {
+      document.addEventListener(
+        event,
+        () => {
+          lastUserInteraction = Date.now();
+        },
+        true
+      );
     });
 
     // Override location changes
     const originalPushState = history.pushState;
-    history.pushState = function() {
+    history.pushState = function () {
       const url = arguments[2];
       if (url && isAdUrl(url)) {
         debug(`Blocked navigation: ${url}`);
@@ -321,15 +335,16 @@
 
   function inspectShadowDOM() {
     // Find all elements with shadow roots
-    const allElements = document.querySelectorAll('*');
-    allElements.forEach(element => {
+    const allElements = document.querySelectorAll("*");
+    allElements.forEach((element) => {
       if (element.shadowRoot) {
         // Apply ad hiding to shadow DOM
-        universalAdSelectors.forEach(selector => {
+        universalAdSelectors.forEach((selector) => {
           try {
-            const shadowElements = element.shadowRoot.querySelectorAll(selector);
-            shadowElements.forEach(el => {
-              el.style.display = 'none !important';
+            const shadowElements =
+              element.shadowRoot.querySelectorAll(selector);
+            shadowElements.forEach((el) => {
+              el.style.display = "none !important";
               debug(`Hidden shadow DOM element: ${selector}`);
             });
           } catch (e) {
@@ -345,21 +360,21 @@
   function bypassAdblockDetection() {
     // Common anti-adblock detection properties
     const fakeProperties = {
-      'canRunAds': true,
-      'hasAdblock': false,
-      'isAdBlockActive': false,
-      'adBlockEnabled': false,
-      'adBlockActive': false,
-      'adblock': false,
-      'adBlocker': false
+      canRunAds: true,
+      hasAdblock: false,
+      isAdBlockActive: false,
+      adBlockEnabled: false,
+      adBlockActive: false,
+      adblock: false,
+      adBlocker: false,
     };
 
-    Object.keys(fakeProperties).forEach(prop => {
+    Object.keys(fakeProperties).forEach((prop) => {
       try {
         Object.defineProperty(window, prop, {
           value: fakeProperties[prop],
           writable: false,
-          configurable: false
+          configurable: false,
         });
       } catch (e) {
         // Property might already be defined
@@ -367,17 +382,19 @@
     });
 
     // Fake ad element to bypass detection
-    const fakeAd = document.createElement('div');
-    fakeAd.id = 'adsense';
-    fakeAd.className = 'adsbygoogle';
-    fakeAd.style.display = 'none';
-    fakeAd.innerHTML = '&nbsp;';
+    const fakeAd = document.createElement("div");
+    fakeAd.id = "adsense";
+    fakeAd.className = "adsbygoogle";
+    fakeAd.style.display = "none";
+    fakeAd.innerHTML = "&nbsp;";
     document.body.appendChild(fakeAd);
 
     // Override common detection functions
     window.blockAdBlock = {
       onDetected: () => {},
-      onNotDetected: () => { debug('Adblock detection bypassed'); }
+      onNotDetected: () => {
+        debug("Adblock detection bypassed");
+      },
     };
 
     // Remove "please disable adblock" messages
@@ -389,14 +406,14 @@
       '[class*="ad-blocker-message"]',
       '[id*="adblock-message"]',
       '[id*="adblock-notice"]',
-      '.adblock-modal',
-      '.turn-off-adblocker',
-      '.whitelist-me'
+      ".adblock-modal",
+      ".turn-off-adblocker",
+      ".whitelist-me",
     ];
 
-    antiAdblockSelectors.forEach(selector => {
+    antiAdblockSelectors.forEach((selector) => {
       const elements = document.querySelectorAll(selector);
-      elements.forEach(el => {
+      elements.forEach((el) => {
         el.remove();
         debug(`Removed anti-adblock element: ${selector}`);
       });
@@ -407,8 +424,8 @@
 
   function optimizePerformance() {
     // Lazy load images to improve performance
-    const images = document.querySelectorAll('img[data-src]');
-    images.forEach(img => {
+    const images = document.querySelectorAll("img[data-src]");
+    images.forEach((img) => {
       if (!isAdUrl(img.dataset.src)) {
         img.src = img.dataset.src;
         delete img.dataset.src;
@@ -416,9 +433,14 @@
     });
 
     // Remove empty ad containers to clean up layout
-    const emptyContainers = document.querySelectorAll('[data-blocked-ad="true"]');
-    emptyContainers.forEach(container => {
-      if (container.parentElement && container.parentElement.children.length === 1) {
+    const emptyContainers = document.querySelectorAll(
+      '[data-blocked-ad="true"]'
+    );
+    emptyContainers.forEach((container) => {
+      if (
+        container.parentElement &&
+        container.parentElement.children.length === 1
+      ) {
         container.parentElement.remove();
       }
     });
@@ -440,19 +462,19 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['src', 'href', 'class', 'id']
+      attributeFilter: ["src", "href", "class", "id"],
     });
 
-    debug('Mutation observer started');
+    debug("Mutation observer started");
   }
 
   // ============= CSS Injection =============
 
   function injectBlockingCSS() {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       /* Hide common ad elements */
-      ${universalAdSelectors.join(',\n')} {
+      ${universalAdSelectors.join(",\n")} {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
@@ -488,30 +510,30 @@
         display: none !important;
       }
     `;
-    
+
     document.head.appendChild(style);
-    debug('Blocking CSS injected');
+    debug("Blocking CSS injected");
   }
 
   // ============= Initialization =============
 
   function initialize() {
     try {
-      debug('Initializing advanced ad blocker...');
+      debug("Initializing advanced ad blocker...");
 
       // Core blocking functions
       blockScriptInjection();
       interceptNetworkRequests();
       blockPopupsAndRedirects();
-      
+
       // DOM manipulation
       hideAdElements();
       bypassAdblockDetection();
       injectBlockingCSS();
-      
+
       // Setup continuous monitoring
       setupMutationObserver();
-      
+
       // Periodic cleanup
       setInterval(() => {
         hideAdElements();
@@ -519,16 +541,15 @@
         optimizePerformance();
       }, 2000);
 
-      console.log('[Advanced AdBlock] Successfully initialized');
-      
+      console.log("[Advanced AdBlock] Successfully initialized");
     } catch (error) {
-      console.error('[Advanced AdBlock] Initialization error:', error);
+      console.error("[Advanced AdBlock] Initialization error:", error);
     }
   }
 
   // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initialize);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize);
   } else {
     initialize();
   }
@@ -549,7 +570,8 @@
     hideAdElements,
     blockScriptInjection,
     bypassAdblockDetection,
-    debug: () => { CONFIG.debugMode = !CONFIG.debugMode; }
+    debug: () => {
+      CONFIG.debugMode = !CONFIG.debugMode;
+    },
   };
-
 })();
