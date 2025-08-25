@@ -5,6 +5,39 @@
   'use strict';
 
   console.log('[YouTube AdBlock] Initializing advanced YouTube ad blocker...');
+  
+  // Inject early to catch initial player setup
+  const script = document.createElement('script');
+  script.textContent = `
+    (function() {
+      // Override ytInitialPlayerResponse before YouTube uses it
+      Object.defineProperty(window, 'ytInitialPlayerResponse', {
+        get() {
+          return this._ytInitialPlayerResponse;
+        },
+        set(value) {
+          if (value && value.adPlacements) {
+            delete value.adPlacements;
+          }
+          if (value && value.playerAds) {
+            delete value.playerAds;
+          }
+          if (value && value.adSlots) {
+            delete value.adSlots;
+          }
+          this._ytInitialPlayerResponse = value;
+        },
+        configurable: true
+      });
+    })();
+  `;
+  
+  // Inject as early as possible
+  if (document.head) {
+    document.head.insertBefore(script, document.head.firstChild);
+  } else {
+    document.documentElement.appendChild(script);
+  }
 
   // Configuration
   const CONFIG = {
@@ -43,6 +76,24 @@
         delete result.adPlacements;
       }
       
+      // Remove VAST ad data
+      if (result && result.playerAds) {
+        debug('Removing playerAds');
+        delete result.playerAds;
+      }
+      
+      // Remove ad scheduling
+      if (result && result.adScheduling) {
+        debug('Removing adScheduling');
+        delete result.adScheduling;
+      }
+      
+      // Remove Google IMA SDK ads
+      if (result && result.googleImaAds) {
+        debug('Removing googleImaAds');
+        delete result.googleImaAds;
+      }
+      
       return result;
     };
   }
@@ -61,7 +112,10 @@
       'adParams',
       'adBreakParams',
       'adBreakHeartbeatParams',
-      'streamingData.serverAbrStreamingUrl'
+      'streamingData.serverAbrStreamingUrl',
+      'playerConfig.adRequestConfig',
+      'playerConfig.adPlacementConfig',
+      'playbackTracking.videostatsPlaybackUrl.baseUrl' // Remove ad tracking
     ];
 
     adPaths.forEach(path => {
@@ -80,9 +134,19 @@
       playerResponse.videoDetails.isPostLiveDvr = false;
     }
 
-    // Remove midroll ad markers
+    // Remove midroll ad markers - IMPORTANT for preventing mid-video ads
     if (playerResponse.playerConfig?.mediaCommonConfig?.dynamicReadaheadConfig) {
       delete playerResponse.playerConfig.mediaCommonConfig.dynamicReadaheadConfig;
+    }
+    
+    // Remove ad pods that define when mid-roll ads should play
+    if (playerResponse.adPlacements) {
+      playerResponse.adPlacements = [];
+    }
+    
+    // Remove client-side ad insertion points
+    if (playerResponse.playerAds) {
+      playerResponse.playerAds = [];
     }
 
     return playerResponse;
@@ -160,13 +224,65 @@
     });
   }
 
+  // Add new function to aggressively handle pre-roll ads
+  function aggressivePreRollHandler() {
+    // Check every 100ms for the first 5 seconds of page load
+    let checks = 0;
+    const preRollInterval = setInterval(() => {
+      checks++;
+      
+      const player = document.querySelector('#movie_player');
+      const video = document.querySelector('video');
+      
+      // Force remove ad states
+      if (player) {
+        if (player.classList.contains('ad-showing') || 
+            player.classList.contains('ad-interrupting') ||
+            player.classList.contains('ad-created')) {
+          
+          player.classList.remove('ad-showing', 'ad-interrupting', 'ad-created');
+          debug('Removed ad classes in pre-roll handler');
+          
+          // Force skip
+          const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button');
+          if (skipBtn) skipBtn.click();
+          
+          // If video exists and is short (likely an ad), skip it
+          if (video && video.duration && video.duration < 30) {
+            video.currentTime = video.duration;
+            debug('Skipped short pre-roll ad');
+          }
+        }
+      }
+      
+      // Stop checking after 5 seconds (50 checks)
+      if (checks > 50) {
+        clearInterval(preRollInterval);
+      }
+    }, 100);
+  }
+
   // 5. Skip video ads automatically
   function skipVideoAds() {
-    // Skip button click
-    const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
-    if (skipButton) {
-      skipButton.click();
-      debug('Clicked skip button');
+    // Skip button click - check multiple selectors
+    const skipSelectors = [
+      '.ytp-ad-skip-button',
+      '.ytp-skip-ad-button', 
+      '.ytp-ad-skip-button-modern',
+      '.ytp-ad-skip-button-container button',
+      'button[class*="skip"]',
+      '.ytp-ad-skip-button-text'
+    ];
+    
+    let skipClicked = false;
+    for (const selector of skipSelectors) {
+      const skipButton = document.querySelector(selector);
+      if (skipButton && !skipClicked) {
+        skipButton.click();
+        skipClicked = true;
+        debug('Clicked skip button: ' + selector);
+        break;
+      }
     }
 
     // Skip preview button
@@ -174,6 +290,39 @@
     if (previewSkip) {
       previewSkip.style.display = 'none';
       debug('Hidden preview container');
+    }
+    
+    // Check for unskippable video ads and handle them
+    const video = document.querySelector('video');
+    const player = document.querySelector('#movie_player');
+    
+    if (player && video && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
+      // For unskippable ads, speed them up slightly and mute
+      if (!skipButton && video.duration && video.duration < 30) {
+        // Speed up short unskippable ads
+        if (video.playbackRate < 2) {
+          video.playbackRate = 2;
+          debug('Speeding up unskippable ad to 2x');
+        }
+        
+        // Mute the ad
+        if (!video.muted) {
+          video.muted = true;
+          video.dataset.wasMutedForAd = 'true';
+          debug('Muted unskippable ad');
+        }
+        
+        // Try to skip to near the end for very short ads
+        if (video.duration < 6 && video.currentTime < video.duration - 1) {
+          video.currentTime = video.duration - 0.5;
+          debug('Skipped to end of very short ad');
+        }
+      }
+    } else if (video && video.dataset.wasMutedForAd === 'true') {
+      // Restore normal state when ad ends
+      video.playbackRate = 1;
+      video.muted = false;
+      delete video.dataset.wasMutedForAd;
     }
   }
 
@@ -269,6 +418,9 @@
           '/youtubei/v1/log_event',
           '/youtubei/v1/ad_break',
           '/youtubei/v1/get_ad',
+          '/youtubei/v1/player/ad_break',
+          '/youtubei/v1/next?adSignalsInfo',
+          '/youtubei/v1/player?adSignalsInfo',
           'doubleclick.net',
           'googleadservices.com',
           'googlesyndication.com',
@@ -277,7 +429,9 @@
           '/pagead/',
           '/ptracking',
           'adsystem',
-          'adserver'
+          'adserver',
+          '/get_video_info.*adformat',
+          'get_midroll_info'
         ];
         
         if (adPatterns.some(pattern => url.includes(pattern))) {
@@ -359,6 +513,23 @@
   // 12. Mutation observer to handle dynamic content
   function setupMutationObserver() {
     const observer = new MutationObserver((mutations) => {
+      // Check for video element changes (new video loaded)
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          const hasVideo = Array.from(mutation.addedNodes).some(node => 
+            node.nodeName === 'VIDEO' || (node.querySelector && node.querySelector('video'))
+          );
+          
+          if (hasVideo) {
+            debug('New video detected, checking for pre-roll ads');
+            setTimeout(() => {
+              skipVideoAds();
+              handleVideoAdPlayback();
+            }, 100);
+          }
+        }
+      }
+      
       // Run ad removal functions
       removeAdElements();
       skipVideoAds();
@@ -403,12 +574,20 @@
 
   // 14. Periodic cleanup function
   function periodicCleanup() {
+    // More aggressive checking for mid-roll ads
     setInterval(() => {
       removeAdElements();
       skipVideoAds();
       enhancedAdDetection();
       bypassAntiAdblock();
-    }, 1000);
+      
+      // Extra check for mid-roll ads
+      const player = document.querySelector('#movie_player');
+      if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
+        player.classList.remove('ad-showing', 'ad-interrupting');
+        skipVideoAds(); // Try to skip again
+      }
+    }, 500); // Check every 500ms for faster response
 
     // Less frequent cleanup
     setInterval(() => {
@@ -449,6 +628,18 @@
         removeSponsoredContent();
         bypassAntiAdblock();
       }, 1000);
+      
+      // Aggressive pre-roll ad handling on video load
+      document.addEventListener('yt-navigate-finish', () => {
+        setTimeout(() => {
+          const player = document.querySelector('#movie_player');
+          if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
+            player.classList.remove('ad-showing', 'ad-interrupting');
+            skipVideoAds();
+            debug('Removed pre-roll ad on navigation');
+          }
+        }, 100);
+      });
 
       console.log('[YouTube AdBlock] Successfully initialized all blocking mechanisms');
 
@@ -463,6 +654,15 @@
   } else {
     initialize();
   }
+  
+  // Start aggressive pre-roll handling immediately
+  aggressivePreRollHandler();
+  
+  // Also run on every navigation
+  document.addEventListener('yt-navigate-start', () => {
+    debug('Navigation started, preparing for pre-roll ads');
+    aggressivePreRollHandler();
+  });
 
   // Also initialize on YouTube's single-page app navigation
   window.addEventListener('yt-navigate-finish', () => {
@@ -471,6 +671,25 @@
       removeAdElements();
       skipVideoAds();
       removeSponsoredContent();
+      
+      // Aggressive check for pre-roll ads
+      const player = document.querySelector('#movie_player');
+      const video = document.querySelector('video');
+      
+      if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
+        player.classList.remove('ad-showing', 'ad-interrupting');
+        skipVideoAds();
+        debug('Handling pre-roll ad after navigation');
+      }
+      
+      // If video is paused at start (likely due to ad), try to play
+      if (video && video.paused && video.currentTime === 0) {
+        setTimeout(() => {
+          if (video.paused && !document.querySelector('.ytp-ad-preview-container')) {
+            video.play().catch(() => {});
+          }
+        }, 500);
+      }
     }, 100);
   });
 
