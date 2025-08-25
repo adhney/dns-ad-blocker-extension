@@ -109,6 +109,7 @@
       '.ytp-ad-module',
       '.ytp-ad-overlay-container',
       '.ytp-ad-message-container',
+      '.ytp-ad-player-overlay', // Add this to remove black overlay
       
       // Overlay ads
       '.ytp-ad-overlay-slot',
@@ -191,31 +192,12 @@
     if (isAd) {
       debug('Ad detected, attempting to skip...');
       
-      // Method 1: Set playback rate to maximum to speed through ad
-      if (video.playbackRate !== 16) {
-        video.playbackRate = 16;
-        debug('Set playback rate to 16x');
-      }
+      // Remove the ad-showing classes to prevent black overlay
+      player.classList.remove('ad-showing');
+      player.classList.remove('ad-interrupting');
       
-      // Method 2: Try to seek to end
-      if (video.duration && isFinite(video.duration)) {
-        video.currentTime = video.duration;
-        debug('Seeked to end of ad');
-      }
-      
-      // Method 3: Mute if we can't skip
-      if (CONFIG.muteAdsIfPlaying && !video.muted) {
-        video.muted = true;
-        debug('Muted ad');
-      }
-    } else {
-      // Restore normal playback for regular videos
-      if (video.playbackRate !== 1) {
-        video.playbackRate = 1;
-      }
-      if (video.muted && CONFIG.muteAdsIfPlaying) {
-        video.muted = false;
-      }
+      // Don't manipulate playback rate or seeking - just click skip
+      // This prevents the play/pause issues
     }
   }
 
@@ -365,15 +347,8 @@
       });
     });
 
-    // Restore video playback if blocked
-    const playButton = document.querySelector('.ytp-play-button');
-    const video = document.querySelector('video');
-    
-    if (video && video.paused && !document.querySelector('.ytp-ad-showing')) {
-      video.play().catch(() => {
-        if (playButton) playButton.click();
-      });
-    }
+    // Don't auto-play videos - let user control playback
+    // This was causing the play/pause issues
 
     // Clear anti-adblock cookies
     if (document.cookie.includes('VISITOR_INFO1_LIVE')) {
